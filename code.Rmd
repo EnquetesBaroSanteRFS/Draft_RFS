@@ -1,0 +1,3699 @@
+---
+title: "Analyse barometre santé - sexe et âge interagis - 18-75"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+setwd('/Users/126862/')
+```
+
+# Importation des bases de données
+
+Les bases de données Stata sont importées et converties pour être lues par R.
+
+
+```{r importation données, echo=FALSE}
+setwd('/Users/126862/')
+Sys.setlocale("LC_ALL", "fr_FR.UTF-8")
+library(haven)
+barometre2020 <- read_dta("Downloalibrds/Données reçues en 2022/baro 2020/BS2020prepost.dta")
+barometre2019 <- read_dta("Downloads/Données reçues en 2022/baro 2019/BS2019.dta")
+barometre2017 <- read_dta("Downloads/Données reçues en 2022/baro 2017/BS2017.dta")
+barometre2016 <- read_dta("Downloads/Données reçues en 2022/baro 2016/BS2016.dta")
+barometre2014 <- read_dta("Downloads/Données reçues en 2022/baro 2014/BS2014.dta")
+barometre2010 <- read_dta("Downloads/Données reçues en 2022/baro 2010/Baro2010.dta")
+barometre2005 <- read_dta("Downloads/Données reçues en 2022/baro 2005/baro2005sp.dta")
+barometre2000 <- read_dta("Downloads/Données reçues en 2022/baro 2000/Baro2000.dta")
+```
+
+On applique les pondérations suggérées par Santé Publique France grâce au package survey.
+
+```{r importation données, echo=FALSE}
+library(survey)
+barometre2020_Rec <- svydesign(ids = ~1, data = barometre2000, weights = ~barometre2000$re99_dipl)
+```
+
+
+
+# Baromètre Santé 2020
+
+## Première approche: favorable ou défavorable à la vaccination en général
+
+### Recodages
+
+On recode la variable va1 en une variable binaire: 1 = "provaccin" ; 0 = "antivaccin". On affiche le tableau des fréquences de la nouvelle variable.
+
+```{r recodage pro anti 2020, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2020$va1 en barometre2020$va1_rec
+barometre2020$va1_rec <- barometre2020$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "1" = "2",
+    "0" = "3",
+    "0" = "4",
+    NULL = "5"
+  )
+freq(barometre2020$va1_rec)
+```
+
+On recode le diplôme pour homogénéiser au maximum d'une enquête à l'autre.
+
+```{r recodage diplome 2020, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2020$diplome en barometre2020$diplome_rec
+barometre2020$diplome_rec <- barometre2020$diplome %>%
+  as.character() %>%
+  fct_recode(
+    "Sans diplome" = "1",
+    "Inferieur bac" = "2",
+    "Bac ou equivalent" = "3",
+    "Bac +2" = "4",
+    "Bac +3/4" = "5",
+    "Bac +5 ou plus" = "6"
+  )
+freq(barometre2020$diplome_rec)
+```
+
+On recode de même la categorie d'agglomération:
+
+```{r recodage cat_agg 2020, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2020$cat_agg6 en barometre2020$cat_agg6_rec
+barometre2020$cat_agg6_rec <- barometre2020$cat_agg6 %>%
+  as.character() %>%
+  fct_recode(
+    "Rural" = "1",
+    "<20.000" = "2",
+    "20 - 99.999" = "3",
+    "100.000 - 199.999" = "4",
+    ">=200.000" = "5",
+    "Agglomération parisienne" = "6"
+  )
+freq(barometre2020$cat_agg6_rec)
+```
+
+On recode de manière explicite les catégories croisées de sexe et d'âge:
+
+```{r recodage sexage 2020, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2020$sexage en barometre2020$sexage_rec
+barometre2020$sexage_rec <- barometre2020$sexage %>%
+  as.character() %>%
+  fct_recode(
+    "Hommes 18-24 ans" = "1",
+    "Hommes 25-34 ans" = "2",
+    "Hommes 35-44 ans" = "3",
+    "Hommes 45-54 ans" = "4",
+    "Hommes 55-64 ans" = "5",
+    "Hommes 65-74 ans" = "6",
+    NULL = "7",
+    "Femmes 18-24 ans" = "8",
+    "Femmes 25-34 ans" = "9",
+    "Femmes 35-44 ans" = "10",
+    "Femmes 45-54 ans" = "11",
+    "Femmes 55-64 ans" = "12",
+    "Femmes 65-74 ans" = "13",
+    NULL = "14"
+  )
+freq(barometre2020$sexage_rec)
+
+## Réordonnancement de barometre2020$sexage_rec
+barometre2020$sexage_rec <- barometre2020$sexage_rec %>%
+  fct_relevel(
+    "Hommes 18-24 ans", "Hommes 25-34 ans", "Hommes 35-44 ans",
+    "Hommes 45-54 ans", "Hommes 55-64 ans", "Hommes 65-74 ans", "Femmes 18-24 ans",
+    "Femmes 25-34 ans", "Femmes 35-44 ans", "Femmes 45-54 ans", "Femmes 55-64 ans",
+    "Femmes 65-74 ans"
+  )
+```
+
+
+On recode enfin les terciles de revenu:
+
+```{r recodage revenus 2020, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2020$sexage en barometre2020$sexage_rec
+## Recodage de barometre2020$rev_3K en barometre2020$rev_3K_rec
+## Recodage de barometre2020$rev_3K en barometre2020$rev_3K_rec
+barometre2020$rev_3K_rec <- barometre2020$rev_3K %>%
+  as.character() %>%
+  fct_recode(
+    "1er tercile" = "1",
+    "2ème tercile" = "2",
+    "3ème tercile" = "3",
+    NULL = "99"
+  )
+freq(barometre2020$rev_3K_rec)
+```
+
+### Tris croisés
+
+On crée d'abord des variables étiquetées sur la vaccination en générale et sur l'attitude vis-à-vis de vaccins spécifiques.
+
+```{r recodage variables labellisées 2020, echo=FALSE}
+library(forcats)
+library(questionr)
+barometre2020$va1labeled <- barometre2020$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "Très favorable" = "1",
+    "Plutôt favorable" = "2",
+    "Plutôt défavorable" = "3",
+    "Très défavorable" = "4",
+    "Ne sait pas" = "5"
+  )
+freq(barometre2020$va1labeled)
+
+barometre2020$va2labeled <- barometre2020$va2 %>%
+  as.character() %>%
+  fct_recode(
+    "Défavorable à certains" = "1",
+    "Défavorable à aucun" = "2",
+    "Défavorable à tous" = "3",
+    "Ne sait pas" = "4"
+  )
+freq(barometre2020$va2labeled)
+
+```
+
+On peut ensuite réaliser les tris croisés sur chacun de ces deux variables recodées.
+
+Vaccination en général 2020 - croisé avec variables explicatives
+
+```{r tris croisés general 2020, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+theme_gtsummary_language("fr", decimal.mark = ",", big.mark = " ")
+barometre2020 %>%
+  dplyr::select("va1labeled", "diplome_rec", "sexage_rec", "cat_agg6_rec", "rev_3K_rec") %>%
+  tbl_summary(
+    by = "va1labeled",
+     percent = "row"
+  ) %>%
+  add_overall(last = TRUE)
+
+```
+
+Vaccination en particulier 2020 - croisé avec variables explicatives
+
+
+```{r tris croisés spécifique 2020, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+barometre2020 %>%
+  dplyr::select("va2labeled", "diplome_rec", "sexage_rec", "cat_agg6_rec", "rev_3K_rec") %>%
+  tbl_summary(
+    by = "va2labeled",
+    percent = "row"
+  ) %>%
+  add_overall(last = TRUE)
+```
+
+
+
+## Description: quels vaccins en particuliers ?
+
+
+```{r tris croisés vaccins particuliers 2020, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+theme_gtsummary_language("fr", decimal.mark = ",", big.mark = " ")
+barometre2020 %>%
+  dplyr::select("va1labeled", "va3_1", "va3_2", "va3_3", "va3_4","va3_5", "va3_6", "va3_7", "va3_8", "va3_9", "va3_10", "va3_11", "va3_12", "va3_13", "va3_14", "va3_15", "va3_16", "va3_17", "va3_18", "va3_19", "va3_20", "va3_21", "va3_22", "va3_23", "va3_24", "va3_25", "va3_26", "va3_27", "va3_28", "va3_29") %>%
+  tbl_summary(
+    by = "va1labeled",
+     percent = "column"
+  ) %>%
+  add_p() %>%
+  add_overall(last = TRUE)
+```
+
+
+On exporte les vaccins moins aimés en particuliers sous format csv
+
+
+```{r exports  vaccins particuliers 2020, echo=FALSE}
+write.csv2(barometre2020[, c("va1labeled", "va3_1", "va3_2", "va3_3", "va3_4","va3_5", "va3_6", "va3_7", "va3_8", "va3_9", "va3_10", "va3_11", "va3_12", "va3_13", "va3_14", "va3_15", "va3_16", "va3_17", "va3_18", "va3_19", "va3_20", "va3_21", "va3_22", "va3_23", "va3_24", "va3_25", "va3_26", "va3_27", "va3_28", "va3_29")], "~/Desktop/vaxSpecif2020.csv")
+```
+
+
+### Calcul de la régression
+
+On calcule ensuite un logit pour examiner les déterminants d'une attitude favorable plutôt que défavorable envers la vaccination en général. 
+
+```{r régressions pro anti 2020, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_proanti_2020 <- glm(barometre2020$va1_rec ~ barometre2020$diplome_rec + barometre2020$sexage_rec + barometre2020$cat_agg6_rec + barometre2020$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+summary(reg_proanti_2020)
+ ggcoef_model(reg_proanti_2020, exponentiate = TRUE)
+forest_model(reg_proanti_2020, recalculate_width= TRUE)
+```
+
+Les calculs sur les prochaines parties de l'enquête 2020 comme sur les enquêtes antérieures suivront désormais toutes ce plan.
+
+## Très défavorable à la vaccination en général par rapport au reste de la population
+
+### Recodages
+
+
+On code une binaire isolant les personnes très défavorable aux vaccins en génarel (1) des autres (0).
+
+```{r recodage très anti vs reste 2020, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2020$va1 en barometre2020$va1_rec
+## Recodage de barometre2020$va1 en barometre2020$Tres_defavorable
+barometre2020$Tres_defavorable <- barometre2020$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "0" = "1",
+    "0" = "2",
+    "0" = "3",
+    "1" = "4",
+    NULL = "5"
+  )
+barometre2020$Tres_defavorable <- relevel (barometre2020$Tres_defavorable, "0")
+freq(barometre2020$Tres_defavorable)
+```
+
+On recode la variable va2: 1 pour "défavorable à certains vaccins", 0 autrement.
+
+```{r recodage bis defav_certains 2020, echo=FALSE}
+## Recodage de barometre2020$va2 en barometre2020$defav_certains
+barometre2020$defav_certains <- barometre2020$va2 %>%
+  as.character() %>%
+  fct_recode(
+    "0" = "2",
+    "0" = "3",
+    "0" = "4"
+  )
+barometre2020$defav_certains <- relevel (barometre2020$defav_certains, "0")
+```
+
+
+### Régression
+
+```{r régressions tresdef 2020, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_tresdef_2020 <- glm(barometre2020$Tres_defavorable ~ barometre2020$diplome_rec + barometre2020$sexage_rec + barometre2020$cat_agg6_rec + barometre2020$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_tresdef_2020, recalculate_width= TRUE)
+```
+
+## Très favorable à la vaccination en général par rapport au reste de la population
+
+On code une binaire isolant les personnes très défavorable aux vaccins en génarel (1) des autres (0).
+
+###Recodage
+
+Très favorable aux vaccins = 1 ; 0 sinon.
+```{r recodage très pro vs reste 2020, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2020$va1 en barometre2020$va1_rec
+## Recodage de barometre2020$va1 en barometre2020$Tres_defavorable
+barometre2020$Tres_favorable <- barometre2020$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "1" = "1",
+    "0" = "2",
+    "0" = "3",
+    "0" = "4",
+    NULL = "5"
+  )
+barometre2020$Tres_favorable <- relevel (barometre2020$Tres_favorable, "0")
+freq(barometre2020$Tres_favorable)
+```
+
+### Régression
+
+```{r régressions tresfav 2020, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_tresfav_2020 <- glm(barometre2020$Tres_favorable ~ barometre2020$diplome_rec + barometre2020$sexage_rec + barometre2020$cat_agg6_rec + barometre2020$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2020, exponentiate = TRUE)
+forest_model(reg_tresfav_2020, recalculate_width= TRUE)
+```
+
+## Très favorable par raport aux favorables aux vaccins en général
+
+
+```{r régressions tresfavvsfavorables 2020, echo=FALSE}
+provax2020 <- barometre2020[barometre2020$va1_rec == 1, ]
+library(GGally)
+library(forestmodel)
+reg_tresfavvsfav_2020 <- glm(provax2020$Tres_favorable ~ provax2020$diplome_rec + provax2020$sexage_rec + provax2020$cat_agg6_rec + provax2020$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_tresfavvsfav_2020, recalculate_width= TRUE)
+```
+
+## Très défavorables par rapport aux défavorables aux vaccins en général
+
+```{r régressions tresdefavvsdefavorables 2020, echo=FALSE}
+antivax2020 <- barometre2020[barometre2020$va1_rec == 0, ]
+library(GGally)
+library(forestmodel)
+reg_tresdefavvsfav_2020 <- glm(antivax2020$Tres_defavorable ~ antivax2020$diplome_rec + antivax2020$sexage_rec + antivax2020$cat_agg6_rec + antivax2020$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_tresdefavvsfav_2020, recalculate_width= TRUE)
+```
+
+## Défavorables à certains vaccins spécifiques vs reste de la population 
+
+```{r régressions defav_certains 2020, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_defav_certains_2020 <- glm(barometre2020$defav_certains ~ barometre2020$diplome_rec + barometre2020$sexage_rec + barometre2020$cat_agg6_rec + barometre2020$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_defav_certains_2020, recalculate_width= TRUE)
+```
+
+## Défavorables à certains vaccins spécifiques vs reste des défavorables aux vaccins en général
+
+
+```{r régressions specifiques_antivax 2020, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_specifiques_antivax_2020 <- glm(antivax2020$defav_certains ~ antivax2020$diplome_rec + antivax2020$sexage_rec + antivax2020$cat_agg6_rec + antivax2020$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_specifiques_antivax_2020, recalculate_width= TRUE)
+```
+
+
+## Défavorables à certains vaccins spécifiques vs reste des favorables aux vaccins en général
+
+
+```{r régressions specifiques_provax 2020, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_specifiques_antivax_2020 <- glm(antivax2020$defav_certains ~ antivax2020$diplome_rec + antivax2020$sexage_rec + antivax2020$cat_agg6_rec + antivax2020$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_specifiques_antivax_2020, recalculate_width= TRUE)
+```
+
+
+
+
+# Baromètre Santé 2019
+
+## Première approche: favorable ou défavorable à la vaccination en général
+
+### Recodages
+
+On recode la variable va1 en une variable binaire: 1 = provaccin ; 0 = antivaccin. On affiche le tableau des fréquences de la nouvelle variable.
+
+```{r recodage pro anti 2019, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2019$va1 en barometre2019$va1_rec
+barometre2019$va1_rec <- barometre2019$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "1" = "2",
+    "0" = "3",
+    "0" = "4",
+    NULL = "5"
+  )
+freq(barometre2019$va1_rec)
+```
+
+On recode le diplome:
+
+```{r recodage diplome 2019, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2019$diplome en barometre2019$diplome_rec
+barometre2019$diplome_rec <- barometre2019$diplome %>%
+  as.character() %>%
+  fct_recode(
+    "Sans diplome" = "1",
+    "Inferieur bac" = "2",
+    "Bac ou equivalent" = "3",
+    "Bac +2" = "4",
+    "Bac +3/4" = "5",
+    "Bac +5 ou plus" = "6"
+  )
+freq(barometre2019$diplome_rec)
+```
+
+On recode la categorie d'agglomération:
+
+```{r recodage cat_agg 2019, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2019$cat_agg6 en barometre2019$cat_agg6_rec
+barometre2019$cat_agg6_rec <- barometre2019$cat_agg6 %>%
+  as.character() %>%
+  fct_recode(
+    "Rural" = "1",
+    "<20.000" = "2",
+    "20 - 99.999" = "3",
+    "100.000 - 199.999" = "4",
+    ">=200.000" = "5",
+    "Agglomération parisienne" = "6"
+  )
+freq(barometre2019$cat_agg6_rec)
+```
+
+On recode les catégories croisées de sexe et d'âge:
+
+```{r recodage sexage 2019, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2019$sexage en barometre2019$sexage_rec
+barometre2019$sexage_rec <- barometre2019$sexage %>%
+  as.character() %>%
+  fct_recode(
+    "Hommes 18-24 ans" = "1",
+    "Hommes 25-34 ans" = "2",
+    "Hommes 35-44 ans" = "3",
+    "Hommes 45-54 ans" = "4",
+    "Hommes 55-64 ans" = "5",
+    "Hommes 65-74 ans" = "6",
+    NULL = "7",
+    "Femmes 18-24 ans" = "8",
+    "Femmes 25-34 ans" = "9",
+    "Femmes 35-44 ans" = "10",
+    "Femmes 45-54 ans" = "11",
+    "Femmes 55-64 ans" = "12",
+    "Femmes 65-74 ans" = "13",
+    NULL = "14"
+  )
+freq(barometre2019$sexage_rec)
+## Réordonnancement de barometre2019$sexage_rec
+barometre2019$sexage_rec <- barometre2019$sexage_rec %>%
+  fct_relevel(
+    "Hommes 18-24 ans", "Hommes 25-34 ans", "Hommes 35-44 ans",
+    "Hommes 45-54 ans", "Hommes 55-64 ans", "Hommes 65-74 ans", "Femmes 18-24 ans",
+    "Femmes 25-34 ans", "Femmes 35-44 ans", "Femmes 45-54 ans", "Femmes 55-64 ans",
+    "Femmes 65-74 ans"
+  )
+```
+
+
+On recode les catégories de revenu:
+
+```{r recodage revenus 2019, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2019$sexage en barometre2019$sexage_rec
+## Recodage de barometre2019$rev_3K en barometre2019$rev_3K_rec
+## Recodage de barometre2019$rev_3K en barometre2019$rev_3K_rec
+barometre2019$rev_3K_rec <- barometre2019$rev_3K %>%
+  as.character() %>%
+  fct_recode(
+    "1er tercile" = "1",
+    "2ème tercile" = "2",
+    "3ème tercile" = "3",
+    NULL = "99"
+  )
+freq(barometre2019$rev_3K_rec)
+```
+
+
+#### Tris croisés
+
+On crée d'abord des variables labellisées.
+
+```{r recodage variables labellisées 2019, echo=FALSE}
+library(forcats)
+library(questionr)
+barometre2019$va1labeled <- barometre2019$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "Très favorable" = "1",
+    "Plutôt favorable" = "2",
+    "Plutôt défavorable" = "3",
+    "Très défavorable" = "4",
+    "Ne sait pas" = "5"
+  )
+freq(barometre2019$va1labeled)
+
+barometre2019$va2labeled <- barometre2019$va2 %>%
+  as.character() %>%
+  fct_recode(
+    "Défavorable à certains" = "1",
+    "Défavorable à aucun" = "2",
+    "Défavorable à tous" = "3",
+    "Ne sait pas" = "4"
+  )
+freq(barometre2019$va2labeled)
+
+```
+
+On recode la variable va2: 1 pour "défavorable à certains vaccins", 0 autrement.
+
+```{r recodage defav_certains 2019, echo=FALSE}
+## Recodage de barometre2019$va2 en barometre2019$defav_certains
+barometre2019$defav_certains <- barometre2019$va2 %>%
+  as.character() %>%
+  fct_recode(
+    "0" = "2",
+    "0" = "3",
+    "0" = "4"
+  )
+barometre2019$defav_certains <- relevel(barometre2019$defav_certains, "0")
+```
+
+Vaccination en général 2019 - croisé avec variables explicatives
+
+```{r tris croisés general 2019, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+theme_gtsummary_language("fr", decimal.mark = ",", big.mark = " ")
+barometre2019 %>%
+  dplyr::select("va1labeled", "diplome_rec", "sexage_rec", "cat_agg6_rec", "rev_3K_rec") %>%
+  tbl_summary(
+    by = "va1labeled",
+    percent = "row"
+  ) %>%
+  add_overall(last = TRUE)
+```
+
+Vaccination spécifique 2019 - croisé avec variables explicatives
+
+```{r tris croisés spécifique 2019, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+barometre2019 %>%
+  dplyr::select("va2labeled", "diplome_rec", "sexage_rec", "cat_agg6_rec", "rev_3K_rec") %>%
+  tbl_summary(
+    by = "va2labeled",
+    percent = "row"
+  ) %>%
+  add_overall(last = TRUE)
+```
+
+
+## Description: quels vaccins en particuliers ?
+
+
+```{r tris croisés vaccins particuliers 2019, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+theme_gtsummary_language("fr", decimal.mark = ",", big.mark = " ")
+barometre2019 %>%
+  dplyr::select("va1labeled", "va3_1", "va3_2", "va3_3", "va3_4","va3_5", "va3_6", "va3_7", "va3_8", "va3_9", "va3_10", "va3_11", "va3_12", "va3_13", "va3_14", "va3_15", "va3_16", "va3_17", "va3_18", "va3_19", "va3_20", "va3_21", "va3_22", "va3_23", "va3_24", "va3_25", "va3_26", "va3_27", "va3_28") %>%
+  tbl_summary(
+    by = "va1labeled",
+     percent = "column"
+  ) %>%
+  add_p() %>%
+  add_overall(last = TRUE)
+```
+
+
+On exporte les vaccins moins aimés en particuliers sous format csv
+
+
+```{r exports  vaccins particuliers 2019, echo=FALSE}
+write.csv2(barometre2019[, c("va1labeled", "va3_1", "va3_2", "va3_3", "va3_4","va3_5", "va3_6", "va3_7", "va3_8", "va3_9", "va3_10", "va3_11", "va3_12", "va3_13", "va3_14", "va3_15", "va3_16", "va3_17", "va3_18", "va3_19", "va3_20", "va3_21", "va3_22", "va3_23", "va3_24", "va3_25", "va3_26", "va3_27", "va3_28")], "~/Desktop/vaxSpecif2019.csv")
+```
+
+
+
+
+### Calcul de la régression
+
+On calcule ensuite un logit pour examiner les déterminants d'une attitude favorable plutôt que défavorable envers la vaccination en général. 
+
+```{r régressions pro anti 2019, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_proanti_2019 <- glm(barometre2019$va1_rec ~ barometre2019$diplome_rec + barometre2019$sexage_rec + barometre2019$cat_agg6_rec + barometre2019$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2019, exponentiate = TRUE)
+forest_model(reg_proanti_2019, recalculate_width= TRUE)
+```
+
+## Très défavorable à la vaccination en général par rapport au reste de la population
+
+### Recodage
+
+
+Très défavorable aux vaccins = 1 ; 0 sinon.
+```{r recodage très anti vs reste 2019, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2019$va1 en barometre2019$va1_rec
+## Recodage de barometre2019$va1 en barometre2019$Tres_defavorable
+barometre2019$Tres_defavorable <- barometre2019$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "0" = "1",
+    "0" = "2",
+    "0" = "3",
+    "1" = "4",
+    NULL = "5"
+  )
+barometre2019$Tres_defavorable <- relevel (barometre2019$Tres_defavorable, "0")
+freq(barometre2019$Tres_defavorable)
+```
+
+
+On recode la variable va2: 1 pour "défavorable à certains vaccins", 0 autrement.
+
+```{r recodage bis defav_certains 2019, echo=FALSE}
+barometre2019$defav_certains <- barometre2019$va2 %>%
+  as.character() %>%
+  fct_recode(
+    "0" = "2",
+    "0" = "3",
+    "0" = "4"
+  )
+```
+
+
+### Régression
+
+```{r régressions tresdef 2019, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_tresdef_2019 <- glm(barometre2019$Tres_defavorable ~ barometre2019$diplome_rec + barometre2019$sexage_rec + barometre2019$cat_agg6_rec + barometre2019$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_tresdef_2019, recalculate_width= TRUE)
+```
+
+## Très favorable à la vaccination en général par rapport au reste de la population
+
+On code une binaire isolant les personnes très défavorable aux vaccins en génarel (1) des autres (0).
+
+###Recodage
+
+Très favorable aux vaccins = 1 ; 0 sinon.
+```{r recodage très pro vs reste 2019, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2019$va1 en barometre2019$va1_rec
+## Recodage de barometre2019$va1 en barometre2019$Tres_defavorable
+barometre2019$Tres_favorable <- barometre2019$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "1" = "1",
+    "0" = "2",
+    "0" = "3",
+    "0" = "4",
+    NULL = "5"
+  )
+barometre2019$Tres_favorable <- relevel (barometre2019$Tres_favorable, "0")
+freq(barometre2019$Tres_favorable)
+```
+
+### Régression
+
+```{r régressions tresfav 2019, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_tresfav_2019 <- glm(barometre2019$Tres_favorable ~ barometre2019$diplome_rec + barometre2019$sexage_rec + barometre2019$cat_agg6_rec + barometre2019$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2019, exponentiate = TRUE)
+forest_model(reg_tresfav_2019, recalculate_width= TRUE)
+```
+
+## Très favorable par rapport aux favorables aux vaccins en général
+
+
+```{r régressions tresfavvsfavorables 2019, echo=FALSE}
+provax2019 <- barometre2019[barometre2019$va1_rec == 1, ]
+library(GGally)
+library(forestmodel)
+reg_tresfavvsfav_2019 <- glm(provax2019$Tres_favorable ~ provax2019$diplome_rec + provax2019$sexage_rec + provax2019$cat_agg6_rec + provax2019$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_tresfavvsfav_2019, recalculate_width= TRUE)
+```
+
+## Très défavorables par rapport aux défavorables aux vaccin en général
+
+```{r régressions tresdefavvsdefavorables 2019, echo=FALSE}
+antivax2019 <- barometre2019[barometre2019$va1_rec == 0, ]
+library(GGally)
+library(forestmodel)
+reg_tresdefavvsfav_2019 <- glm(antivax2019$Tres_defavorable ~ antivax2019$diplome_rec + antivax2019$sexage_rec + antivax2019$cat_agg6_rec + antivax2019$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_tresdefavvsfav_2019, recalculate_width= TRUE)
+```
+
+## Défavorables à certains vaccins spécifiques vs reste de la population 
+
+```{r régressions defav_certains 2019, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_defav_certains_2019 <- glm(barometre2019$defav_certains ~ barometre2019$diplome_rec + barometre2019$sexage_rec + barometre2019$cat_agg6_rec + barometre2019$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_defav_certains_2019, recalculate_width= TRUE)
+```
+
+## Défavorables à certains vaccins spécifiques vs reste des défavorables aux vaccins en général
+
+
+```{r régressions specifiques_antivax 2019, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_specifiques_antivax_2019 <- glm(antivax2019$defav_certains ~ antivax2019$diplome_rec + antivax2019$sexage_rec + antivax2019$cat_agg6_rec + antivax2019$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_specifiques_antivax_2019, recalculate_width= TRUE)
+```
+
+## Défavorables à certains vaccins spécifiques vs reste des favorables aux vaccins en général
+
+
+```{r régressions specifiques_provax 2019, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_specifiques_antivax_2019 <- glm(antivax2019$defav_certains ~ antivax2019$diplome_rec + antivax2019$sexage_rec + antivax2019$cat_agg6_rec + antivax2019$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_specifiques_antivax_2019, recalculate_width= TRUE)
+```
+
+# Baromètre santé 2017
+
+## Pro-anti
+
+### Recodages
+
+On recode la variable va1 en une variable binaire: 1 = provaccin ; 0 = antivaccin. On affiche le tableau des fréquences de la nouvelle variable.
+
+```{r recodage pro anti 2017, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2017$va1 en barometre2017$va1_rec
+barometre2017$va1_rec <- barometre2017$Q389_C %>%
+  as.character() %>%
+  fct_recode(
+    "1" = "2",
+    "0" = "3",
+    "0" = "4",
+    NULL = "5"
+  )
+freq(barometre2017$va1_rec)
+```
+
+On recode le diplome:
+
+```{r recodage diplome 2017, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2017$diplome en barometre2017$diplome_rec
+barometre2017$diplome_rec <- barometre2017$diplome %>%
+  as.character() %>%
+  fct_recode(
+    "Sans diplome" = "1",
+    "Inferieur bac" = "2",
+    "Bac ou equivalent" = "3",
+    "Bac +2" = "4",
+    "Bac +3/4" = "5",
+    "Bac +5 ou plus" = "6"
+  )
+freq(barometre2017$diplome_rec)
+```
+
+On recode la categorie d'agglomération:
+
+```{r recodage cat_agg 2017, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2017$cat_agg6 en barometre2017$cat_agg6_rec
+barometre2017$cat_agg6_rec <- barometre2017$cat_agg6 %>%
+  as.character() %>%
+  fct_recode(
+    "Rural" = "1",
+    "<20.000" = "2",
+    "20 - 99.999" = "3",
+    "100.000 - 199.999" = "4",
+    ">=200.000" = "5",
+    "Agglomération parisienne" = "6"
+  )
+freq(barometre2017$cat_agg6_rec)
+```
+
+On recode les catégories croisées de sexe et d'âge:
+
+```{r recodage sexage 2017, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2017$sexage en barometre2017$sexage_rec
+barometre2017$sexage_rec <- barometre2017$sexage %>%
+  as.character() %>%
+  fct_recode(
+    "Hommes 18-24 ans" = "1",
+    "Hommes 25-34 ans" = "2",
+    "Hommes 35-44 ans" = "3",
+    "Hommes 45-54 ans" = "4",
+    "Hommes 55-64 ans" = "5",
+    "Hommes 65-75 ans" = "6",
+    "Femmes 18-24 ans" = "7",
+    "Femmes 25-34 ans" = "8",
+    "Femmes 35-44 ans" = "9",
+    "Femmes 45-54 ans" = "10",
+    "Femmes 55-64 ans" = "11",
+    "Femmes 65-75 ans" = "12"
+  )
+freq(barometre2017$sexage_rec)
+## Réordonnancement de barometre2017$sexage_rec
+barometre2017$sexage_rec <- barometre2017$sexage_rec %>%
+  fct_relevel(
+    "Hommes 18-24 ans", "Hommes 25-34 ans", "Hommes 35-44 ans",
+    "Hommes 45-54 ans", "Hommes 55-64 ans", "Hommes 65-75 ans", "Femmes 18-24 ans",
+    "Femmes 25-34 ans", "Femmes 35-44 ans", "Femmes 45-54 ans", "Femmes 55-64 ans",
+    "Femmes 65-75 ans"
+  )
+```
+
+
+On recode les catégories de revenu:
+
+```{r recodage revenus 2017, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2017$sexage en barometre2017$sexage_rec
+## Recodage de barometre2017$rev_3K en barometre2017$rev_3K_rec
+## Recodage de barometre2017$rev_3K en barometre2017$rev_3K_rec
+barometre2017$rev_3K_rec <- barometre2017$rev_3K %>%
+  as.character() %>%
+  fct_recode(
+    "1er tercile" = "1",
+    "2ème tercile" = "2",
+    "3ème tercile" = "3",
+    NULL = "99"
+  )
+freq(barometre2017$rev_3K_rec)
+```
+
+#### Tris croisés
+
+On crée d'abord des variables labellisées.
+
+```{r recodage variables labellisées 2017, echo=FALSE}
+library(forcats)
+library(questionr)
+barometre2017$va1labeled <- barometre2017$Q389_C %>%
+  as.character() %>%
+  fct_recode(
+    "Très favorable" = "1",
+    "Plutôt favorable" = "2",
+    "Plutôt défavorable" = "3",
+    "Très défavorable" = "4",
+    "Ne sait pas" = "5"
+  )
+freq(barometre2017$va1labeled)
+
+barometre2017$va2labeled <- barometre2017$Q390_C %>%
+  as.character() %>%
+  fct_recode(
+    "Défavorable à certains" = "1",
+    "Défavorable à aucun" = "2",
+    "Défavorable à tous" = "3",
+    "Ne sait pas" = "4"
+  )
+freq(barometre2017$va2labeled)
+```
+
+On recode la variable va2: 1 pour "défavorable à certains vaccins", 0 autrement.
+
+```{r recodage defav_certains 2017, echo=FALSE}
+## Recodage de barometre2017$va2 en barometre2017$defav_certains
+barometre2017$defav_certains <- barometre2017$Q390_C %>%
+  as.character() %>%
+  fct_recode(
+    "0" = "2",
+    "0" = "3",
+    "0" = "4"
+  )
+barometre2017$defav_certains <- relevel(barometre2017$defav_certains, "0")
+```
+
+Vaccination en général 2017 - croisé avec variables explicatives
+
+
+```{r tris croisés general 2017, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+theme_gtsummary_language("fr", decimal.mark = ",", big.mark = " ")
+barometre2017 %>%
+  dplyr::select("va1labeled", "diplome_rec", "sexage_rec", "cat_agg6_rec", "rev_3K_rec") %>%
+  tbl_summary(
+    by = "va1labeled",
+    percent = "row"
+  ) %>%
+  add_overall(last = TRUE)
+```
+
+Vaccination spécifique 2017 - croisé avec variables explicatives
+
+
+```{r tris croisés spécifique 2017, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+barometre2017 %>%
+  dplyr::select("va2labeled", "diplome_rec", "sexage_rec", "cat_agg6_rec", "rev_3K_rec") %>%
+  tbl_summary(
+    by = "va2labeled",
+    percent = "row"
+  ) %>%
+  add_overall(last = TRUE)
+```
+
+## Description: quels vaccins en particuliers ?
+
+
+```{r tris croisés vaccins particuliers 2017, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+theme_gtsummary_language("fr", decimal.mark = ",", big.mark = " ")
+barometre2017 %>%
+  dplyr::select("va1labeled", "Q391_1_C", "Q391_2_C", "Q391_3_C", "Q391_4_C", "Q391_5_C", "Q391_6_C", "Q391_7_C", "Q391_8_C", "Q391_9_C", "Q391_9_C", "Q391_10_C", "Q391_11_C", "Q391_12_C", "Q391_13_C", "Q391_14_C", "Q391_15_C", "Q391_16_C", "Q391_17_C", "Q391_18_C", "Q391_19_C", "Q391_20_C", "Q391_21_C", "Q391_22_C", "Q391_23_C", "Q391_24_C", "Q391_25_C", "Q391_26_C", "Q391_27_C", "Q391_29_C") %>%
+  tbl_summary(
+    by = "va1labeled",
+     percent = "column"
+  ) %>%
+  add_p() %>%
+  add_overall(last = TRUE)
+```
+
+
+On exporte les vaccins moins aimés en particuliers sous format csv
+
+
+```{r exports  vaccins particuliers 2017, echo=FALSE}
+write.csv2(barometre2017[, c("va1labeled", "Q391_1_C", "Q391_2_C", "Q391_3_C", "Q391_4_C", "Q391_5_C", "Q391_6_C", "Q391_7_C", "Q391_8_C", "Q391_9_C", "Q391_9_C", "Q391_10_C", "Q391_11_C", "Q391_12_C", "Q391_13_C", "Q391_14_C", "Q391_15_C", "Q391_16_C", "Q391_17_C", "Q391_18_C", "Q391_19_C", "Q391_20_C", "Q391_21_C", "Q391_22_C", "Q391_23_C", "Q391_24_C", "Q391_25_C", "Q391_26_C", "Q391_27_C", "Q391_29_C")], "~/Desktop/vaxSpecif2017.csv")
+```
+
+
+
+#### Calcul de la régression
+
+```{r régressions pro anti 2017, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_proanti_2017 <- glm(barometre2017$va1_rec ~ barometre2017$diplome_rec + barometre2017$sexage_rec + barometre2017$cat_agg6_rec + barometre2017$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2017, exponentiate = TRUE)
+forest_model(reg_proanti_2017, recalculate_width= TRUE)
+
+```
+
+#### Recodage
+
+
+Très défavorable aux vaccins = 1 ; 0 sinon.
+```{r recodage très anti vs reste 2017, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2017$va1 en barometre2017$Tres_defavorable
+barometre2017$Tres_defavorable <- barometre2017$Q389_C %>%
+  as.character() %>%
+  fct_recode(
+    "0" = "1",
+    "0" = "2",
+    "0" = "3",
+    "1" = "4",
+    NULL = "5"
+  )
+barometre2017$Tres_defavorable <- relevel (barometre2017$Tres_defavorable, "0")
+freq(barometre2017$Tres_defavorable)
+```
+
+#### Régression
+
+```{r régressions tresdef 2017, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_tresdef_2017 <- glm(barometre2017$Tres_defavorable ~ barometre2017$diplome_rec + barometre2017$sexage_rec + barometre2017$cat_agg6_rec + barometre2017$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2017, exponentiate = TRUE)
+forest_model(reg_tresdef_2017, recalculate_width= TRUE)
+```
+
+### Très pro vs reste
+
+#### Recodage
+
+
+Très défavorable aux vaccins = 1 ; 0 sinon.
+```{r recodage très pro vs reste 2017, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2017$va1 en barometre2017$va1_rec
+## Recodage de barometre2017$va1 en barometre2017$Tres_defavorable
+barometre2017$Tres_favorable <- barometre2017$Q389_C  %>%
+  as.character() %>%
+  fct_recode(
+    "1" = "1",
+    "0" = "2",
+    "0" = "3",
+    "0" = "4",
+    NULL = "5"
+  )
+barometre2017$Tres_favorable <- relevel (barometre2017$Tres_favorable, "0")
+freq(barometre2017$Tres_favorable)
+```
+
+#### Régression
+
+```{r régressions tresfav 2017, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_tresfav_2017 <- glm(barometre2017$Tres_favorable ~ barometre2017$diplome_rec + barometre2017$sexage_rec + barometre2017$cat_agg6_rec + barometre2017$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2017, exponentiate = TRUE)
+forest_model(reg_tresfav_2017, recalculate_width= TRUE)
+```
+
+
+### Restriction aux favorables aux vaccins en général
+
+
+```{r régressions tresfavvsfavorables 2017, echo=FALSE}
+provax2017 <- barometre2017[barometre2017$va1_rec == 1, ]
+library(GGally)
+library(forestmodel)
+reg_tresfavvsfav_2017 <- glm(provax2017$Tres_favorable ~ provax2017$diplome_rec + provax2017$sexage_rec + provax2017$cat_agg6_rec + provax2017$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_tresfavvsfav_2017, recalculate_width= TRUE)
+```
+
+### Restriction aux défavorables aux vaccin en général
+
+```{r régressions tresdefavvsdefavorables 2017, echo=FALSE}
+antivax2017 <- barometre2017[barometre2017$va1_rec == 0, ]
+library(GGally)
+library(forestmodel)
+reg_tresdefavvsdefav_2017 <- glm(antivax2017$Tres_defavorable ~ antivax2017$diplome_rec + antivax2017$sexage_rec + antivax2017$cat_agg6_rec + antivax2017$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_tresdefavvsdefav_2017, recalculate_width= TRUE)
+```
+
+### Défavorables à certains vaccins vs reste
+
+#### Régression
+
+Etre défavorable à certains vaccins vs reste de la population
+
+```{r régressions defav_certains 2017, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_defav_certains_2017 <- glm(barometre2017$defav_certains ~ barometre2017$diplome_rec + barometre2017$sexage_rec + barometre2017$cat_agg6_rec + barometre2017$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2017, exponentiate = TRUE)
+forest_model(reg_defav_certains_2017, recalculate_width= TRUE)
+```
+
+### Restriction aux favorables aux vaccins en général: défavorables à certains vs. reste
+
+
+```{r régressions defavscertainspro 2017, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_favspecifiques_2017 <- glm(provax2017$defav_certains ~ provax2017$diplome_rec + provax2017$sexage_rec + provax2017$cat_agg6_rec + provax2017$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2017, exponentiate = TRUE)
+forest_model(reg_favspecifiques_2017, recalculate_width= TRUE)
+```
+
+### Restriction aux défavorables aux vaccins en général: défavorables à certains vs reste
+
+
+```{r régressions defavscertainsanti 2017, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_defavspecifiques_2017 <- glm(antivax2017$defav_certains ~ antivax2017$diplome_rec + antivax2017$sexage_rec + antivax2017$cat_agg6_rec + antivax2017$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2017, exponentiate = TRUE)
+forest_model(reg_defavspecifiques_2017, recalculate_width= TRUE)
+```
+
+
+# Baromètre santé 2016
+
+## Pro-anti
+
+### Recodages
+
+On recode la variable va1 en une variable binaire: 1 = provaccin ; 0 = antivaccin. On affiche le tableau des fréquences de la nouvelle variable.
+
+```{r recodage pro anti 2016, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2016$va1 en barometre2016$va1_rec
+barometre2016$va1_rec <- barometre2016$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "1" = "2",
+    "0" = "3",
+    "0" = "4",
+    NULL = "5"
+  )
+freq(barometre2016$va1_rec)
+```
+
+On recode le diplome. Malheureusement, les regroupements pour les diplomes en 2016 ne sont pas compatibles avec ceux des autres enquêtes: les Bac+2 et 3 sont mêlés entre eux, les bac+4 sont regroupés avec les bac+5 et plus. 
+
+```{r recodage diplome 2016, echo=FALSE}
+library(forcats)
+library(questionr)
+
+## Recodage de barometre2016$dip5 en barometre2016$diplome_rec
+barometre2016$diplome_rec <- barometre2016$dip5 %>%
+  as.character() %>%
+  fct_recode(
+    "Sans diplome" = "1",
+    "Inférieur au bac" = "2",
+    "Bac ou equivalent" = "3",
+    "Bac +2/+3" = "4",
+    "Bac+4 ou plus" = "5",
+    NULL = "6"
+  )
+freq(barometre2016$diplome_rec)
+## Recodage de barometre2016$diplome en barometre2016$diplome_rec
+```
+
+On recode la categorie d'agglomération:
+
+```{r recodage cat_agg 2016, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2016$cat_agg6 en barometre2016$cat_agg6_rec
+
+barometre2016$ca
+
+barometre2016$cat_agg6_rec <- barometre2016$catagg6 %>%
+  as.character() %>%
+  fct_recode(
+    "Rural" = "1",
+    "<20.000" = "2",
+    "20 - 99.999" = "3",
+    "100.000 - 199.999" = "4",
+    ">=200.000" = "5",
+    "Agglomération parisienne" = "6"
+  )
+freq(barometre2016$cat_agg6_rec)
+```
+
+On recode les catégories croisées de sexe et d'âge:
+
+```{r recodage sexage 2016, echo=FALSE}
+
+## Recodage de barometre2016$sexage en barometre2016$sexage_rec
+barometre2016$sexage_rec <- barometre2016$sexage %>%
+  as.character() %>%
+  fct_recode(
+    "Hommes 18-24 ans" = "1",
+    "Hommes 25-34 ans" = "2",
+    "Hommes 35-44 ans" = "3",
+    "Hommes 45-54 ans" = "4",
+    "Hommes 55-64 ans" = "5",
+    "Hommes 65-74 ans" = "6",
+    "Femmes 18-24 ans" = "7",
+    "Femmes 25-34 ans" = "8",
+    "Femmes 35-44 ans" = "9",
+    "Femmes 45-54 ans" = "10",
+    "Femmes 55-64 ans" = "11",
+    "Femmes 65-75 ans" = "12"
+  )
+freq(barometre2016$sexage_rec)
+## Réordonnancement de barometre2016$sexage_rec
+barometre2016$sexage_rec <- barometre2016$sexage_rec %>%
+  fct_relevel(
+    "Hommes 18-24 ans", "Hommes 25-34 ans", "Hommes 35-44 ans",
+    "Hommes 45-54 ans", "Hommes 55-64 ans", "Hommes 65-74 ans", "Femmes 18-24 ans",
+    "Femmes 25-34 ans", "Femmes 35-44 ans", "Femmes 45-54 ans", "Femmes 55-64 ans",
+    "Femmes 65-75 ans"
+  )
+```
+
+On recode les catégories de revenu:
+
+```{r recodage revenus 2016, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2016$sexage en barometre2016$sexage_rec
+## Recodage de barometre2016$rev_3K en barometre2016$rev_3K_rec
+## Recodage de barometre2016$rev_3K en barometre2016$rev_3K_rec
+barometre2016$rev_3K_rec <- barometre2016$rev_3K %>%
+  as.character() %>%
+  fct_recode(
+    "1er tercile" = "1",
+    "2ème tercile" = "2",
+    "3ème tercile" = "3",
+    NULL = "99"
+  )
+freq(barometre2016$rev_3K_rec)
+```
+
+### Tris croisés
+
+On crée d'abord des variables labellisées.
+
+```{r recodage variables labellisées 2016, echo=FALSE}
+library(forcats)
+library(questionr)
+barometre2016$va1labeled <- barometre2016$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "Très favorable" = "1",
+    "Plutôt favorable" = "2",
+    "Plutôt défavorable" = "3",
+    "Très défavorable" = "4",
+    "Ne sait pas" = "5"
+  )
+freq(barometre2016$va1labeled)
+
+barometre2016$va2labeled <- barometre2016$va2 %>%
+  as.character() %>%
+  fct_recode(
+    "Défavorable à certains" = "1",
+    "Défavorable à aucun" = "2",
+    "Défavorable à tous" = "3",
+    "Ne sait pas" = "4"
+  )
+freq(barometre2016$va2labeled)
+
+```
+
+On recode la variable va2: 1 pour "défavorable à certains vaccins", 0 autrement.
+
+```{r recodage defav_certains 2016, echo=FALSE}
+## Recodage de barometre2016$va2 en barometre2016$defav_certains
+barometre2016$defav_certains <- barometre2016$va2 %>%
+  as.character() %>%
+  fct_recode(
+    "0" = "2",
+    "0" = "3",
+    "0" = "4"
+  )
+barometre2016$defav_certains <- relevel(barometre2016$defav_certains, "0")
+```
+
+Vaccination en général 2016 - croisé avec variables explicatives
+
+
+```{r tris croisés general 2016, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+theme_gtsummary_language("fr", decimal.mark = ",", big.mark = " ")
+barometre2016 %>%
+  dplyr::select("va1labeled", "diplome_rec", "sexage_rec", "cat_agg6_rec", "rev_3K_rec") %>%
+  tbl_summary(
+    by = "va1labeled",
+    percent = "row"
+  ) %>%
+  add_overall(last = TRUE)
+```
+
+Vaccination spécifique 2016 - croisé avec variables explicatives
+
+```{r tris croisés spécifique 2016, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+barometre2016 %>%
+  dplyr::select("va2labeled", "diplome_rec", "sexage_rec", "cat_agg6_rec", "rev_3K_rec") %>%
+  tbl_summary(
+    by = "va2labeled",
+    percent = "row"
+  ) %>%
+  add_overall(last = TRUE)
+```
+
+## Description: quels vaccins en particuliers ?
+
+En 2016, codage particulier: on demande quel vaccin on aime pas: 1ere reponse codée dans une variable, éventuelle deuxième réponse codée dans une variable suivante etc.
+
+On exporte les vaccins moins aimés en particuliers sous format csv:
+
+```{r exports  vaccins particuliers 2016, echo=FALSE}
+## Recodage de barometre2016$va3_1 en barometre2016$va3_1_rec
+barometre2016$va3_1_rec <- barometre2016$va3_1 %>%
+  as.character() %>%
+  fct_recode(
+    "bcg" = "1",
+    "dtp" = "4",
+    "dtpc" = "5",
+    "grippe" = "8",
+    "h1n1" = "9",
+    "hepatiteA" = "10",
+    "hepatiteB" = "11",
+    "hpv" = "13",
+    "ror" = "20"
+  )
+
+barometre2016$va3_2_rec <- barometre2016$va3_2 %>%
+  as.character() %>%
+  fct_recode(
+    "bcg" = "1",
+    "dtp" = "4",
+    "dtpc" = "5",
+    "grippe" = "8",
+    "h1n1" = "9",
+    "hepatiteA" = "10",
+    "hepatiteB" = "11",
+    "hpv" = "13",
+    "ror" = "20"
+  )
+
+barometre2016$va3_3_rec <- barometre2016$va3_3 %>%
+  as.character() %>%
+  fct_recode(
+    "bcg" = "1",
+    "dtp" = "4",
+    "dtpc" = "5",
+    "grippe" = "8",
+    "h1n1" = "9",
+    "hepatiteA" = "10",
+    "hepatiteB" = "11",
+    "hpv" = "13",
+    "ror" = "20"
+  )
+
+
+barometre2016$va3_4_rec <- barometre2016$va3_4 %>%
+  as.character() %>%
+  fct_recode(
+    "bcg" = "1",
+    "dtp" = "4",
+    "dtpc" = "5",
+    "grippe" = "8",
+    "h1n1" = "9",
+    "hepatiteA" = "10",
+    "hepatiteB" = "11",
+    "hpv" = "13",
+    "ror" = "20"
+  )
+
+barometre2016$va3_5_rec <- barometre2016$va3_5 %>%
+  as.character() %>%
+  fct_recode(
+    "bcg" = "1",
+    "dtp" = "4",
+    "dtpc" = "5",
+    "grippe" = "8",
+    "h1n1" = "9",
+    "hepatiteA" = "10",
+    "hepatiteB" = "11",
+    "hpv" = "13",
+    "ror" = "20"
+  )
+
+barometre2016$va3_6_rec <- barometre2016$va3_6 %>%
+  as.character() %>%
+  fct_recode(
+    "bcg" = "1",
+    "dtp" = "4",
+    "dtpc" = "5",
+    "grippe" = "8",
+    "h1n1" = "9",
+    "hepatiteA" = "10",
+    "hepatiteB" = "11",
+    "hpv" = "13",
+    "ror" = "20"
+  )
+
+barometre2016$va3_7_rec <- barometre2016$va3_7 %>%
+  as.character() %>%
+  fct_recode(
+    "bcg" = "1",
+    "dtp" = "4",
+    "dtpc" = "5",
+    "grippe" = "8",
+    "h1n1" = "9",
+    "hepatiteA" = "10",
+    "hepatiteB" = "11",
+    "hpv" = "13",
+    "ror" = "20"
+  )
+
+
+barometre2016$va3_8_rec <- barometre2016$va3_8 %>%
+  as.character() %>%
+  fct_recode(
+    "bcg" = "1",
+    "dtp" = "4",
+    "dtpc" = "5",
+    "grippe" = "8",
+    "h1n1" = "9",
+    "hepatiteA" = "10",
+    "hepatiteB" = "11",
+    "hpv" = "13",
+    "ror" = "20"
+  )
+
+
+write.csv2(barometre2016[, c("va1labeled", "va3_1_rec", "va3_2_rec", "va3_3_rec", "va3_4_rec","va3_5_rec", "va3_6_rec", "va3_7_rec", "va3_8_rec")], "~/Desktop/vaxSpecif2016.csv")
+```
+
+
+
+
+### Calcul de la régression
+
+```{r régressions pro anti 2016, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_proanti_2016 <- glm(barometre2016$va1_rec ~ barometre2016$diplome_rec + barometre2016$sexage_rec + barometre2016$cat_agg6_rec + barometre2016$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2016, exponentiate = TRUE)
+forest_model(reg_proanti_2016, recalculate_width= TRUE)
+
+```
+
+### Recodage
+
+
+Très défavorable aux vaccins = 1 ; 0 sinon.
+```{r recodage très anti vs reste 2016, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2016$va1 en barometre2016$Tres_defavorable
+barometre2016$Tres_defavorable <- barometre2016$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "0" = "1",
+    "0" = "2",
+    "0" = "3",
+    "1" = "4",
+    NULL = "5"
+  )
+barometre2016$Tres_defavorable <- relevel(barometre2016$Tres_defavorable, "0")
+freq(barometre2016$Tres_defavorable)
+```
+
+### Régression
+
+```{r régressions tresdef 2016, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_tresdef_2016 <- glm(barometre2016$Tres_defavorable ~ barometre2016$diplome_rec + barometre2016$sexage_rec + barometre2016$cat_agg6_rec + barometre2016$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2016, exponentiate = TRUE)
+forest_model(reg_tresdef_2016, recalculate_width= TRUE)
+```
+
+## Très pro vs reste
+
+### Recodage
+
+
+Très défavorable aux vaccins = 1 ; 0 sinon.
+```{r recodage très pro vs reste 2016, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2016$va1 en barometre2016$Tres_defavorable
+barometre2016$Tres_favorable <- barometre2016$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "1" = "1",
+    "0" = "2",
+    "0" = "3",
+    "0" = "4",
+    NULL = "5"
+  )
+barometre2016$Tres_favorable <- relevel(barometre2016$Tres_favorable, "0")
+freq(barometre2016$Tres_favorable)
+```
+
+### Régression
+
+```{r régressions tresfav 2016, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_tresfav_2016 <- glm(barometre2016$Tres_favorable ~ barometre2016$diplome_rec + barometre2016$sexage_rec + barometre2016$cat_agg6_rec + barometre2016$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2016, exponentiate = TRUE)
+forest_model(reg_tresfav_2016, recalculate_width= TRUE)
+```
+
+## Restriction aux favorables aux vaccins en général
+
+
+```{r régressions tresfavvsfavorables 2016, echo=FALSE}
+provax2016 <- barometre2016[barometre2016$va1_rec == 1, ]
+library(GGally)
+library(forestmodel)
+reg_tresfavvsfav_2016 <- glm(provax2016$Tres_favorable ~ provax2016$diplome_rec + provax2016$sexage_rec + provax2016$cat_agg6_rec + provax2016$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_tresfavvsfav_2016, recalculate_width= TRUE)
+```
+
+## Restriction aux défavorables aux vaccin en général
+
+```{r régressions tresdefavvsdefavorables 2016, echo=FALSE}
+antivax2016 <- barometre2016[barometre2016$va1_rec == 0, ]
+library(GGally)
+library(forestmodel)
+reg_tresdefavvsdefav_2016 <- glm(antivax2016$Tres_defavorable ~ antivax2016$diplome_rec + antivax2016$sexage_rec + antivax2016$cat_agg6_rec + antivax2016$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_tresdefavvsdefav_2016, recalculate_width= TRUE)
+```
+
+## Défavorables à certains vaccins vs reste
+
+Etre défavorable à certains vaccins vs reste de la population
+
+```{r régressions defav_certains 2016, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_defav_certains_2016 <- glm(barometre2016$defav_certains ~ barometre2016$diplome_rec + barometre2016$sexage_rec + barometre2016$cat_agg6_rec + barometre2016$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2016, exponentiate = TRUE)
+forest_model(reg_defav_certains_2016, recalculate_width= TRUE)
+```
+
+## Restriction aux favorables aux vaccins en général: défavorables à certains vs. reste
+
+
+```{r régressions defavcertainspro 2016, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_favspecifiques_2016 <- glm(provax2016$defav_certains ~ provax2016$diplome_rec + provax2016$sexage_rec + provax2016$cat_agg6_rec + provax2016$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2016, exponentiate = TRUE)
+forest_model(reg_favspecifiques_2016, recalculate_width= TRUE)
+```
+
+## Restriction aux défavorables aux vaccins en général: défavorables à certains vs reste
+
+
+```{r régressions defavcertainsanti 2016, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_defavspecifiques_2016 <- glm(antivax2016$defav_certains ~ antivax2016$diplome_rec + antivax2016$sexage_rec + antivax2016$cat_agg6_rec + antivax2016$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2016, exponentiate = TRUE)
+forest_model(reg_defavspecifiques_2016, recalculate_width= TRUE)
+```
+
+
+# Baromètre santé 2014
+
+## Pro-anti
+
+### Recodages
+
+On recode la variable va1 en une variable binaire: 1 = provaccin ; 0 = antivaccin. On affiche le tableau des fréquences de la nouvelle variable.
+
+```{r recodage pro anti 2014, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2014$va1 en barometre2014$va1_rec
+barometre2014$va1_rec <- barometre2014$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "1" = "2",
+    "0" = "3",
+    "0" = "4",
+    NULL = "5"
+  )
+freq(barometre2014$va1_rec)
+```
+
+On recode le diplome:
+
+```{r recodage diplome 2014, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2014$diplome en barometre2014$diplome_rec
+barometre2014$diplome_rec <- barometre2014$rs_diplome %>%
+  as.character() %>%
+  fct_recode(
+    "Sans diplome" = "1",
+    "Inferieur bac" = "2",
+    "Bac ou equivalent" = "3",
+    "Bac +2" = "4",
+    "Bac +3/4" = "5",
+    "Bac +5 ou plus" = "6"
+  )
+freq(barometre2014$diplome_rec)
+```
+
+On recode la categorie d'agglomération:
+
+```{r recodage cat_agg 2014, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2014$cat_agg6 en barometre2014$cat_agg6_rec
+barometre2014$cat_agg6_rec <- barometre2014$cat_agg6 %>%
+  as.character() %>%
+  fct_recode(
+    "Rural" = "1",
+    "<20.000" = "2",
+    "20 - 99.999" = "3",
+    "100.000 - 199.999" = "4",
+    ">=200.000" = "5",
+    "Agglomération parisienne" = "6"
+  )
+freq(barometre2014$cat_agg6_rec)
+```
+
+On recode les catégories croisées de sexe et d'âge:
+
+```{r recodage sexage 2014, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2014$sexage en barometre2014$sexage_rec
+barometre2014$sexage_rec <- barometre2014$sexage %>%
+  as.character() %>%
+  fct_recode(
+    "Hommes 18-24 ans" = "1",
+    "Hommes 25-34 ans" = "2",
+    "Hommes 35-44 ans" = "3",
+    "Hommes 45-54 ans" = "4",
+    "Hommes 55-64 ans" = "5",
+    "Hommes 65-74 ans" = "6",
+    "Femmes 18-24 ans" = "7",
+    "Femmes 25-34 ans" = "8",
+    "Femmes 35-44 ans" = "9",
+    "Femmes 45-54 ans" = "10",
+    "Femmes 55-64 ans" = "11",
+    "Femmes 65-75 ans" = "12"
+  )
+freq(barometre2014$sexage_rec)
+## Réordonnancement de barometre2014$sexage_rec
+barometre2014$sexage_rec <- barometre2014$sexage_rec %>%
+  fct_relevel(
+    "Hommes 18-24 ans", "Hommes 25-34 ans", "Hommes 35-44 ans",
+    "Hommes 45-54 ans", "Hommes 55-64 ans", "Hommes 65-74 ans", "Femmes 18-24 ans",
+    "Femmes 25-34 ans", "Femmes 35-44 ans", "Femmes 45-54 ans", "Femmes 55-64 ans",
+    "Femmes 65-75 ans"
+  )
+```
+
+
+On recode les catégories de revenu:
+
+```{r recodage revenus 2014, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2014$sexage en barometre2014$sexage_rec
+## Recodage de barometre2014$rev_3K en barometre2014$rev_3K_rec
+## Recodage de barometre2014$rev_3K en barometre2014$rev_3K_rec
+barometre2014$rev_3K_rec <- barometre2014$rev_3K %>%
+  as.character() %>%
+  fct_recode(
+    "1er tercile" = "1",
+    "2ème tercile" = "2",
+    "3ème tercile" = "3",
+    NULL = "99"
+  )
+freq(barometre2014$rev_3K_rec)
+```
+
+### Tris croisés
+
+On crée d'abord des variables labellisées.
+
+```{r recodage variables labellisées 2014, echo=FALSE}
+library(forcats)
+library(questionr)
+barometre2014$va1labeled <- barometre2014$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "Très favorable" = "1",
+    "Plutôt favorable" = "2",
+    "Plutôt défavorable" = "3",
+    "Très défavorable" = "4",
+    "Ne sait pas" = "5"
+  )
+freq(barometre2014$va1labeled)
+
+barometre2014$va2labeled <- barometre2014$va2 %>%
+  as.character() %>%
+  fct_recode(
+    "Défavorable à certains" = "1",
+    "Défavorable à aucun" = "2",
+    "Défavorable à tous" = "3",
+    "Ne sait pas" = "4"
+  )
+freq(barometre2014$va2labeled)
+```
+
+
+On recode la variable va2: 1 pour "défavorable à certains vaccins", 0 autrement.
+
+```{r recodage defav_certains 2014, echo=FALSE}
+## Recodage de barometre2014$va2 en barometre2014$defav_certains
+barometre2014$defav_certains <- barometre2014$va2 %>%
+  as.character() %>%
+  fct_recode(
+    "0" = "2",
+    "0" = "3",
+    "0" = "4"
+  )
+barometre2014$defav_certains <- relevel (barometre2014$defav_certains, "0")
+```
+
+Vaccination en général 2014 - croisé avec variables explicatives
+
+```{r tris croisés general 2014, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+theme_gtsummary_language("fr", decimal.mark = ",", big.mark = " ")
+barometre2014 %>%
+  dplyr::select("va1labeled", "diplome_rec", "sexage_rec", "cat_agg6_rec", "rev_3K_rec") %>%
+  tbl_summary(
+    by = "va1labeled",
+    percent = "row"
+  ) %>%
+  add_overall(last = TRUE)
+```
+
+Vaccination spécifique 2014 - croisé avec variables explicatives
+
+
+```{r tris croisés spécifique 2014, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+barometre2014 %>%
+  dplyr::select("va2labeled", "diplome_rec", "sexage_rec", "cat_agg6_rec", "rev_3K_rec") %>%
+  tbl_summary(
+    by = "va2labeled",
+    percent = "row"
+  ) %>%
+  add_overall(last = TRUE)
+```
+
+
+## Description: quels vaccins en particuliers ?
+
+
+```{r tris croisés vaccins particuliers 2014, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+theme_gtsummary_language("fr", decimal.mark = ",", big.mark = " ")
+barometre2014 %>%
+  dplyr::select("va1labeled", "va3i1", "va3i2", "va3i3", "va3i4", "va3i5", "va3i6", "va3i7", "va3i8", "va3i9", "va3i10","va3i11", "va3i12", "va3i13", "va3i14", "va3i15", "va3i16", "va3i17", "va3i18", "va3i19", "va3i20", "va3i21", "va3i22", "va3i23","va3i24","va3i25", "va3i26", "va3i27", "va3i28", "va3i29", "va3i30", "va3i31", "va3i32",
+"va3i33", "va3i34", "va3i35", "va3i36", "va3i37", "va3i38","va3i39", "va3i40", "va3i41", "va3i42", "va3i43") %>%
+  tbl_summary(
+    by = "va1labeled",
+     percent = "column"
+  ) %>%
+  add_p()%>%
+  add_overall(last = TRUE)
+```
+
+
+On exporte les vaccins moins aimés en particuliers sous format csv
+
+
+```{r exports  vaccins particuliers 2014, echo=FALSE}
+write.csv2(barometre2014[, c("va1labeled", "va3i1", "va3i2", "va3i3", "va3i4", "va3i5", "va3i6", "va3i7", "va3i8", "va3i9", "va3i10","va3i11", "va3i12", "va3i13", "va3i14", "va3i15", "va3i16", "va3i17", "va3i18", "va3i19", "va3i20", "va3i21", "va3i22", "va3i23","va3i24","va3i25", "va3i26", "va3i27", "va3i28", "va3i29", "va3i30", "va3i31", "va3i32","va3i33", "va3i34", "va3i35", "va3i36", "va3i37", "va3i38","va3i39", "va3i40", "va3i41", "va3i42", "va3i43")], "~/Desktop/vaxSpecif2014.csv")
+```
+
+
+### Calcul de la régression
+
+```{r régressions pro anti 2014, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_proanti_2014 <- glm(barometre2014$va1_rec ~ barometre2014$diplome_rec + barometre2014$sexage_rec + barometre2014$cat_agg6_rec + barometre2014$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2014, exponentiate = TRUE)
+forest_model(reg_proanti_2014, recalculate_width= TRUE)
+
+```
+
+### Recodage
+
+
+Très défavorable aux vaccins = 1 ; 0 sinon.
+```{r recodage très anti vs reste 2014, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2014$va1 en barometre2014$Tres_defavorable
+barometre2014$Tres_defavorable <- barometre2014$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "0" = "1",
+    "0" = "2",
+    "0" = "3",
+    "1" = "4",
+    NULL = "5"
+  )
+barometre2014$Tres_defavorable <- relevel (barometre2014$Tres_defavorable, "0")
+freq(barometre2014$Tres_defavorable)
+```
+
+### Régression
+
+```{r régressions tresdef 2014, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_tresdef_2014 <- glm(barometre2014$Tres_defavorable ~ barometre2014$diplome_rec + barometre2014$sexage_rec + barometre2014$cat_agg6_rec + barometre2014$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2014, exponentiate = TRUE)
+forest_model(reg_tresdef_2014, recalculate_width= TRUE)
+```
+
+## Très pro vs reste
+
+#### Recodage
+
+
+Très défavorable aux vaccins = 1 ; 0 sinon.
+```{r recodage très pro vs reste 2014, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2014$va1 en barometre2014$va1_rec
+## Recodage de barometre2014$va1 en barometre2014$Tres_defavorable
+barometre2014$Tres_favorable <- barometre2014$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "1" = "1",
+    "0" = "2",
+    "0" = "3",
+    "0" = "4",
+    NULL = "5"
+  )
+barometre2014$Tres_favorable <- relevel (barometre2014$Tres_favorable, "0")
+freq(barometre2014$Tres_favorable)
+```
+
+### Régression
+
+```{r régressions tresfav 2014, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_tresfav_2014 <- glm(barometre2014$Tres_favorable ~ barometre2014$diplome_rec + barometre2014$sexage_rec + barometre2014$cat_agg6_rec + barometre2014$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2014, exponentiate = TRUE)
+forest_model(reg_tresfav_2014, recalculate_width= TRUE)
+```
+
+## Restriction aux favorables aux vaccins en général
+
+
+```{r régressions tresfavvsfavorables 2014, echo=FALSE}
+provax2014 <- barometre2014[barometre2014$va1_rec == 1, ]
+library(GGally)
+library(forestmodel)
+reg_tresfavvsfav_2014 <- glm(provax2014$Tres_favorable ~ provax2014$diplome_rec + provax2014$sexage_rec + provax2014$cat_agg6_rec + provax2014$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_tresfavvsfav_2014, recalculate_width= TRUE)
+```
+
+## Restriction aux défavorables aux vaccin en général
+
+```{r régressions tresdefavvsdefavorables 2014, echo=FALSE}
+antivax2014 <- barometre2014[barometre2014$va1_rec == 0, ]
+library(GGally)
+library(forestmodel)
+reg_tresdefavvsdefav_2014 <- glm(antivax2014$Tres_defavorable ~ antivax2014$diplome_rec + antivax2014$sexage_rec + antivax2014$cat_agg6_rec + antivax2014$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_tresdefavvsdefav_2014, recalculate_width= TRUE)
+```
+
+## Défavorables à certains vaccins vs reste
+
+Etre défavorable à certains vaccins vs reste de la population
+
+```{r régressions defav_certains 2014, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_defav_certains_2014 <- glm(barometre2014$defav_certains ~ barometre2014$diplome_rec + barometre2014$sexage_rec + barometre2014$cat_agg6_rec + barometre2014$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2014, exponentiate = TRUE)
+forest_model(reg_defav_certains_2014, recalculate_width= TRUE)
+```
+
+## Restriction aux favorables aux vaccins en général: défavorables à certains vs. reste
+
+
+```{r régressions defavcertainspro 2014, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_favspecifiques_2014 <- glm(provax2014$defav_certains ~ provax2014$diplome_rec + provax2014$sexage_rec + provax2014$cat_agg6_rec + provax2014$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2014, exponentiate = TRUE)
+forest_model(reg_favspecifiques_2014, recalculate_width= TRUE)
+```
+
+## Restriction aux défavorables aux vaccins en général: défavorables à certains vs reste
+
+
+```{r régressions defavcertainsanti 2014, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_defavspecifiques_2014 <- glm(antivax2014$defav_certains ~ antivax2014$diplome_rec + antivax2014$sexage_rec + antivax2014$cat_agg6_rec + antivax2014$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2014, exponentiate = TRUE)
+forest_model(reg_defavspecifiques_2014, recalculate_width= TRUE)
+```
+
+
+# Baromètre santé 2010
+
+## Pro-anti
+
+### Recodages
+
+On recode la variable va1 en une variable binaire: 1 = provaccin ; 0 = antivaccin. On affiche le tableau des fréquences de la nouvelle variable.
+
+```{r recodage pro anti 2010, echo=FALSE}
+
+
+library(forcats)
+library(questionr)
+
+## Recodage de barometre2010$va1 en barometre2010$va1_rec
+barometre2010$va1_rec <- barometre2010$VA1 %>%
+  as.character() %>%
+  fct_recode(
+    "1" = "1",
+    "1" = "2",
+    "0" = "3",
+    "0" = "4",
+    NULL = "5"
+  )
+freq(barometre2010$va1_rec)
+```
+
+On recode le diplome:
+
+
+
+```{r recodage diplome 2010, echo=FALSE}
+library(forcats)
+library(questionr)
+library(expss)
+## Recodage de barometre2010$diplome en barometre2010$diplome_rec
+barometre2010$diplome_rec <- barometre2010$RS_DIPLOME %>%
+  as.character() %>%
+  fct_recode(
+    "Sans diplome" = "1",
+    "Inferieur bac" = "2",
+    "Bac ou equivalent" = "3",
+    "Bac +2" = "4",
+    "Bac +3/4" = "5",
+    "Bac +5 ou plus" = "6"
+  )
+freq(barometre2010$diplome_rec)
+```
+
+On recode la categorie d'agglomération:
+
+
+```{r recodage cat_agg 2010, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2010$cat_agg6 en barometre2010$cat_agg6_rec
+barometre2010$cat_agg6_rec <- barometre2010$RS_AGGLO6R %>%
+  as.character() %>%
+  fct_recode(
+    "Rural" = "1",
+    "<20.000" = "2",
+    "20 - 99.999" = "3",
+    "100.000 - 199.999" = "4",
+    ">=200.000" = "5",
+    "Agglomération parisienne" = "6"
+  )
+freq(barometre2010$cat_agg6_rec)
+```
+
+On recode les catégories croisées de sexe et d'âge. La variable n'étant pas nativement dans la base de données, on la crée depuis les deux variables séparées RS_SEXE et RS2  .
+
+Autre: 15-18 ans
+
+```{r recodage sexage 2010, echo=FALSE}
+library(forcats)
+library(questionr)
+library(dplyr)
+## Recodage de barometre2010$RS2 en barometre2010$RS2_rec
+barometre2010$RS2_rec <- barometre2010$RS2 %>%
+  as.character() %>%
+  fct_recode(
+    NULL = "15",
+    NULL = "16",
+    NULL = "17",
+    "18 - 24 ans" = "18",
+    "18 - 24 ans" = "19",
+    "18 - 24 ans" = "20",
+    "18 - 24 ans" = "21",
+    "18 - 24 ans" = "22",
+    "18 - 24 ans" = "23",
+    "18 - 24 ans" = "24",
+    "25 -34 ans" = "25",
+    "25 -34 ans" = "26",
+    "25 -34 ans" = "27",
+    "25 -34 ans" = "28",
+    "25 -34 ans" = "29",
+    "25 -34 ans" = "30",
+    "25 -34 ans" = "31",
+    "25 -34 ans" = "32",
+    "25 -34 ans" = "33",
+    "25 -34 ans" = "34",
+    "35 - 44 ans" = "35",
+    "35 - 44 ans" = "36",
+    "35 - 44 ans" = "37",
+    "35 - 44 ans" = "38",
+    "35 - 44 ans" = "39",
+    "35 - 44 ans" = "40",
+    "35 - 44 ans" = "41",
+    "35 - 44 ans" = "42",
+    "35 - 44 ans" = "43",
+    "35 - 44 ans" = "44",
+    "45 - 54 ans" = "45",
+    "45 - 54 ans" = "46",
+    "45 - 54 ans" = "47",
+    "45 - 54 ans" = "48",
+    "45 - 54 ans" = "49",
+    "45 - 54 ans" = "50",
+    "45 - 54 ans" = "51",
+    "45 - 54 ans" = "52",
+    "45 - 54 ans" = "53",
+    "45 - 54 ans" = "54",
+    "55 -64 ans" = "55",
+    "55 -64 ans" = "56",
+    "55 -64 ans" = "57",
+    "55 -64 ans" = "58",
+    "55 -64 ans" = "59",
+    "55 -64 ans" = "60",
+    "55 -64 ans" = "61",
+    "55 -64 ans" = "62",
+    "55 -64 ans" = "63",
+    "55 -64 ans" = "64",
+    "65 -74 ans" = "65",
+    "65 -74 ans" = "66",
+    "65 -74 ans" = "67",
+    "65 -74 ans" = "68",
+    "65 -74 ans" = "69",
+    "65 -74 ans" = "70",
+    "65 -74 ans" = "71",
+    "65 -74 ans" = "72",
+    "65 -74 ans" = "73",
+    "65 -74 ans" = "74",
+    "NA" = "75",
+    "NA" = "76",
+    "NA" = "77",
+    "NA" = "78",
+    "NA" = "79",
+    "NA" = "80",
+    "NA" = "81",
+    "NA" = "82",
+    "NA" = "83",
+    "NA" = "84",
+    "NA" = "85"
+  )
+
+freq(barometre2010$RS2_rec)
+
+## Recodage de barometre2010$RS_SEXE en barometre2010$RS_SEXE_rec
+barometre2010$RS_SEXE_rec <- barometre2010$RS_SEXE %>%
+  as.character() %>%
+  fct_recode(
+    "Homme" = "1",
+    "Femme" = "2"
+  )
+
+## Interaction des deux variables
+
+barometre2010$sexage_rec <- case_when(
+  barometre2010$RS2_rec == "18 - 24 ans" & barometre2010$RS_SEXE_rec == "Femme" ~ "Femme 18-24 ans",
+  barometre2010$RS2_rec == "25 -34 ans" & barometre2010$RS_SEXE_rec == "Femme" ~ "Femme 25-34 ans",
+  barometre2010$RS2_rec == "35 - 44 ans"& barometre2010$RS_SEXE_rec == "Femme" ~ "Femme 35-44 ans",
+  barometre2010$RS2_rec == "45 - 54 ans" & barometre2010$RS_SEXE_rec == "Femme" ~ "Femme 45-54 ans",
+  barometre2010$RS2_rec == "55 -64 ans" & barometre2010$RS_SEXE_rec == "Femme" ~ "Femme 55-64 ans",
+  barometre2010$RS2_rec ==  "65 -74 ans" & barometre2010$RS_SEXE_rec == "Femme" ~ "Femme 65-74 ans",
+  barometre2010$RS2_rec ==  "NA" & barometre2010$RS_SEXE_rec == "Femme" ~ "NA",
+  barometre2010$RS2_rec == "18 - 24 ans" & barometre2010$RS_SEXE_rec == "Homme" ~ "Homme 18-24 ans",
+  barometre2010$RS2_rec == "25 -34 ans" & barometre2010$RS_SEXE_rec == "Homme" ~ "Homme 25-34 ans",
+  barometre2010$RS2_rec == "35 - 44 ans"& barometre2010$RS_SEXE_rec == "Homme" ~ "Homme 35-44 ans",
+  barometre2010$RS2_rec == "45 - 54 ans" & barometre2010$RS_SEXE_rec == "Homme" ~ "Homme 45-54 ans",
+  barometre2010$RS2_rec == "55 -64 ans" & barometre2010$RS_SEXE_rec == "Homme" ~ "Homme 55-64 ans",
+  barometre2010$RS2_rec ==  "65 -74 ans" & barometre2010$RS_SEXE_rec == "Homme" ~ "Homme 65-74 ans",
+  barometre2010$RS2_rec ==  "NA" & barometre2010$RS_SEXE_rec == "Homme" ~ "NA",
+)
+
+## Pas de réordonnancement nécessaire -> skip reorder
+```
+
+
+On recode les catégories de revenu:
+
+
+```{r recodage revenus 2010, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2010$rev_3K en barometre2010$rev_3K_rec
+barometre2010$rev_3K_rec <- barometre2010$RS_REVENU_UCB %>%
+  as.character() %>%
+  fct_recode(
+    "1er tercile" = "1",
+    "2ème tercile" = "2",
+    "3ème tercile" = "3",
+    NULL = "99"
+  )
+freq(barometre2010$rev_3K_rec)
+```
+
+### Tris croisés
+
+On crée d'abord des variables labellisées.
+
+```{r recodage variables labellisées 2010, echo=FALSE}
+library(forcats)
+library(questionr)
+barometre2010$va1labeled <- barometre2010$VA1 %>%
+  as.character() %>%
+  fct_recode(
+    "Très favorable" = "1",
+    "Plutôt favorable" = "2",
+    "Plutôt défavorable" = "3",
+    "Très défavorable" = "4",
+    "Ne sait pas" = "5"
+  )
+freq(barometre2010$va1labeled)
+
+barometre2010$va2labeled <- barometre2010$VA2 %>%
+  as.character() %>%
+  fct_recode(
+    "Défavorable à certains" = "1",
+    "Défavorable à aucun" = "2",
+    "Défavorable à tous" = "3",
+    "Ne sait pas" = "4"
+  )
+freq(barometre2010$va2labeled)
+
+```
+
+On recode la variable va2: 1 pour "défavorable à certains vaccins", 0 autrement. Niveau de référence "0"
+
+```{r recodage defav_certains 2010, echo=FALSE}
+## Recodage de barometre2010$va2 en barometre2010$defav_certains
+barometre2010$defav_certains <- barometre2010$VA2 %>%
+  as.character() %>%
+  fct_recode(
+    "0" = "2",
+    "0" = "3",
+    "0" = "4"
+  )
+barometre2010$defav_certains <- relevel (barometre2010$defav_certains, "0")
+```
+
+Vaccination en général 2010 - croisé avec variables explicatives
+
+```{r tris croisés general 2010, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+theme_gtsummary_language("fr", decimal.mark = ",", big.mark = " ")
+barometre2010 %>%
+  dplyr::select("va1labeled", "diplome_rec", "sexage_rec", "cat_agg6_rec", "rev_3K_rec") %>%
+  tbl_summary(
+    by = "va1labeled",
+    percent = "row"
+  ) %>%
+  add_overall(last = TRUE)
+```
+
+Vaccination spécifique 2010 - croisé avec variables explicatives
+
+
+```{r tris croisés spécifique 2010, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+barometre2010 %>%
+  dplyr::select("va2labeled", "diplome_rec", "sexage_rec", "cat_agg6_rec", "rev_3K_rec") %>%
+  tbl_summary(
+    by = "va2labeled",
+    percent = "row"
+  ) %>%
+  add_overall(last = TRUE)
+```
+
+
+## Vaccins spécifiques
+
+Même systeme qu'en 2016. VA8_DEF1 à VA8_DEF7 - mais quelle légende ??
+
+```{r exports  vaccins particuliers 2010, echo=FALSE}
+library(questionr)
+freq(barometre2010$VA8A)
+
+## Recodage de barometre2010$VA8_DEF1 en barometre2010$VA8_DEF1_rec
+barometre2010$VA8_DEF1_rec <- barometre2010$VA8_DEF1 %>%
+  as.character() %>%
+  fct_recode(
+    "un" = "1",
+    "deux" = "2",
+    "trois" = "3",
+    "quatre" = "4",
+    "cinq" = "5",
+    "six" = "6",
+    "sept" = "7",
+    "H1N1" = "8",
+    "neuf" = "9",
+    "dix" = "10",
+    "onze" = "11",
+    "douze" = "12",
+    "quatorze" = "14"
+  )
+
+barometre2010$VA8_DEF2_rec <- barometre2010$VA8_DEF2 %>%
+  as.character() %>%
+  fct_recode(
+    "un" = "1",
+    "deux" = "2",
+    "trois" = "3",
+    "quatre" = "4",
+    "cinq" = "5",
+    "six" = "6",
+    "sept" = "7",
+    "H1N1" = "8",
+    "neuf" = "9",
+    "dix" = "10",
+    "onze" = "11",
+    "douze" = "12",
+    "quatorze" = "14"
+  )
+
+barometre2010$VA8_DEF3_rec <- barometre2010$VA8_DEF3 %>%
+  as.character() %>%
+  fct_recode(
+    "un" = "1",
+    "deux" = "2",
+    "trois" = "3",
+    "quatre" = "4",
+    "cinq" = "5",
+    "six" = "6",
+    "sept" = "7",
+    "H1N1" = "8",
+    "neuf" = "9",
+    "dix" = "10",
+    "onze" = "11",
+    "douze" = "12",
+    "quatorze" = "14"
+  )
+
+barometre2010$VA8_DEF4_rec <- barometre2010$VA8_DEF4 %>%
+  as.character() %>%
+  fct_recode(
+    "un" = "1",
+    "deux" = "2",
+    "trois" = "3",
+    "quatre" = "4",
+    "cinq" = "5",
+    "six" = "6",
+    "sept" = "7",
+    "H1N1" = "8",
+    "neuf" = "9",
+    "dix" = "10",
+    "onze" = "11",
+    "douze" = "12",
+    "quatorze" = "14"
+  )
+
+barometre2010$VA8_DEF5_rec <- barometre2010$VA8_DEF5 %>%
+  as.character() %>%
+  fct_recode(
+    "un" = "1",
+    "deux" = "2",
+    "trois" = "3",
+    "quatre" = "4",
+    "cinq" = "5",
+    "six" = "6",
+    "sept" = "7",
+    "H1N1" = "8",
+    "neuf" = "9",
+    "dix" = "10",
+    "onze" = "11",
+    "douze" = "12",
+    "quatorze" = "14"
+  )
+
+barometre2010$VA8_DEF6_rec <- barometre2010$VA8_DEF6 %>%
+  as.character() %>%
+  fct_recode(
+    "un" = "1",
+    "deux" = "2",
+    "trois" = "3",
+    "quatre" = "4",
+    "cinq" = "5",
+    "six" = "6",
+    "sept" = "7",
+    "H1N1" = "8",
+    "neuf" = "9",
+    "dix" = "10",
+    "onze" = "11",
+    "douze" = "12",
+    "quatorze" = "14"
+  )
+
+barometre2010$VA8_DEF7_rec <- barometre2010$VA8_DEF7 %>%
+  as.character() %>%
+  fct_recode(
+    "un" = "1",
+    "deux" = "2",
+    "trois" = "3",
+    "quatre" = "4",
+    "cinq" = "5",
+    "six" = "6",
+    "sept" = "7",
+    "H1N1" = "8",
+    "neuf" = "9",
+    "dix" = "10",
+    "onze" = "11",
+    "douze" = "12",
+    "quatorze" = "14"
+  )
+
+library(questionr)
+freq(barometre2010$VA8_DEF1)
+write.csv2(barometre2010[, c("VA8_DEF1_rec","VA8_DEF2_rec", "VA8_DEF3_rec","VA8_DEF4_rec", "VA8_DEF5_rec", "VA8_DEF6_rec", "VA8_DEF7_rec")], "~/Desktop/vaxSpecif2010.csv")
+```
+
+
+### Calcul de la régression: défavorables (1) par rapport aux favorables (0)
+
+
+```{r régressions pro anti 2010, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_proanti_2010 <- glm(barometre2010$va1_rec ~ barometre2010$diplome_rec + barometre2010$sexage_rec + barometre2010$cat_agg6_rec + barometre2010$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2010, exponentiate = TRUE)
+forest_model(reg_proanti_2010, recalculate_width= TRUE)
+
+```
+
+### Recodage très défavorable et plutôt favorable
+
+
+Très défavorable à cerains vaccins = 1 ; 0 sinon.
+```{r recodage très anti vs reste 2010, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2010$va1 en barometre2010$Tres_defavorable
+barometre2010$Tres_defavorable <- barometre2010$VA1 %>%
+  as.character() %>%
+  fct_recode(
+    "0" = "1",
+    "0" = "2",
+    "0" = "3",
+    "1" = "4",
+    NULL = "5"
+  )
+barometre2010$Tres_defavorable <- relevel (barometre2010$Tres_defavorable, "0")
+freq(barometre2010$Tres_defavorable)
+```
+
+Plutôt défavorable à cerains vaccins = 1 ; 0 sinon. Scénario de référence: 0.
+```{r recodage plutot anti vs reste 2010, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2010$va1 en barometre2010$Tres_defavorable
+barometre2010$Plutot_defav <- barometre2010$VA1 %>%
+  as.character() %>%
+  fct_recode(
+    "0" = "1",
+    "0" = "2",
+    "1" = "3",
+    "0" = "4",
+    NULL = "5"
+  )
+barometre2010$Plutot_defav <- relevel (barometre2010$Plutot_defav, "0")
+freq(barometre2010$Plutot_defav)
+```
+
+
+### Plutôt anti vs reste
+
+Plutôt défavorable aux vaccins = 1 ; 0 sinon.
+
+```{r régressions plutot anti 2010, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_plutotdef_2010 <- glm(barometre2010$Plutot_defav ~ barometre2010$diplome_rec + barometre2010$sexage_rec + barometre2010$cat_agg6_rec + barometre2010$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2010, exponentiate = TRUE)
+forest_model(reg_plutotdef_2010, recalculate_width= TRUE)
+```
+
+
+
+### Très anti vs reste
+
+Très défavorable aux vaccins = 1 ; 0 sinon.
+
+```{r régressions tresdef 2010, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_tresdef_2010 <- glm(barometre2010$Tres_defavorable ~ barometre2010$diplome_rec + barometre2010$sexage_rec + barometre2010$cat_agg6_rec + barometre2010$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2010, exponentiate = TRUE)
+forest_model(reg_tresdef_2010, recalculate_width= TRUE)
+```
+
+## Très pro vs reste
+
+### Recodage
+
+
+Très favorable aux vaccins = 1 ; 0 sinon.
+```{r recodage très pro vs reste 2010, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2010$VA1 en barometre2010$Tres_defavorable
+barometre2010$Tres_favorable <- barometre2010$VA1 %>%
+  as.character() %>%
+  fct_recode(
+    "1" = "1",
+    "0" = "2",
+    "0" = "3",
+    "0" = "4",
+    NULL = "5"
+  )
+barometre2010$Tres_favorable <- relevel (barometre2010$Tres_favorable, "0")
+freq(barometre2010$Tres_favorable)
+```
+
+### Régression très favorables vs reste
+
+```{r régressions tresfav 2010, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_tresfav_2010 <- glm(barometre2010$Tres_favorable ~ barometre2010$diplome_rec + barometre2010$sexage_rec + barometre2010$cat_agg6_rec + barometre2010$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2010, exponentiate = TRUE)
+forest_model(reg_tresfav_2010, recalculate_width= TRUE)
+```
+
+## Restriction aux favorables aux vaccins en général
+
+Très favorables (1) vs favorables (0)
+
+```{r régressions tresfavvsfavorables 2010, echo=FALSE}
+provax2010 <- barometre2010[barometre2010$va1_rec == 1, ]
+library(GGally)
+library(forestmodel)
+reg_tresfavvsfav_2010 <- glm(provax2010$Tres_favorable ~ provax2010$diplome_rec + provax2010$sexage_rec + provax2010$cat_agg6_rec + provax2010$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_tresfavvsfav_2010, recalculate_width= TRUE)
+```
+
+## Restriction aux défavorables aux vaccins en général
+
+Très défavorables (1) vs favorables (0)
+
+```{r régressions tresdefavvsdefavorables 2010, echo=FALSE}
+antivax2010 <- barometre2010[barometre2010$va1_rec == 0, ]
+library(GGally)
+library(forestmodel)
+reg_tresdefavvsdefav_2010 <- glm(antivax2010$Tres_defavorable ~ antivax2010$diplome_rec + antivax2010$sexage_rec + antivax2010$cat_agg6_rec + antivax2010$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_tresdefavvsdefav_2010, recalculate_width= TRUE)
+```
+
+## Défavorables à certains vaccins vs reste
+
+### Régression
+
+Etre défavorable à certains vaccins vs reste de la population
+
+```{r régressions defav_certains 2010, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_defav_certains_2010 <- glm(barometre2010$defav_certains ~ barometre2010$diplome_rec + barometre2010$sexage_rec + barometre2010$cat_agg6_rec + barometre2010$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2010, exponentiate = TRUE)
+forest_model(reg_defav_certains_2010, recalculate_width= TRUE)
+```
+
+## Restriction aux favorables aux vaccins en général: défavorables à certains vs. reste
+
+
+```{r régressions defavcertainspro 2010, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_favspecifiques_2010 <- glm(provax2010$defav_certains ~ provax2010$diplome_rec + provax2010$sexage_rec + provax2010$cat_agg6_rec + provax2010$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2010, exponentiate = TRUE)
+forest_model(reg_favspecifiques_2010, recalculate_width= TRUE)
+```
+
+## Restriction aux défavorables aux vaccins en général: défavorables à certains vs reste
+
+
+```{r régressions defavcertainsanti 2010, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_defavspecifiques_2010 <- glm(antivax2010$defav_certains ~ antivax2010$diplome_rec + antivax2010$sexage_rec + antivax2010$cat_agg6_rec + antivax2010$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2010, exponentiate = TRUE)
+forest_model(reg_defavspecifiques_2010, recalculate_width= TRUE)
+```
+
+
+
+# Baromètre santé 2005
+
+## Pro-anti
+
+### Recodages
+
+On recode la variable va1 en une variable binaire: 1 = provaccin ; 0 = antivaccin. On prend comme valeur de référence 1: être provaccin. On affiche le tableau des fréquences de la nouvelle variable.
+
+```{r recodage pro anti 2005, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2005$va1 en barometre2005$va1_rec
+barometre2005$va1_rec <- barometre2005$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "1" = "2",
+    "0" = "3",
+    "0" = "4",
+    NULL = "5"
+  )
+## pour changer valeur de référence:
+## barometre2000$va1_rec <- relevel(barometre2000$va1_rec , "0") 
+freq(barometre2005$va1_rec)
+```
+
+On recode le diplôme:
+
+```{r recodage diplome 2005, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2005$sb18r2 en barometre2005$diplome_rec
+barometre2005$diplome_rec <- barometre2005$sb18r2%>%
+  as.character() %>%
+  fct_recode(
+    "Sans diplome" = "0",
+    "Inferieur bac" = "1",
+    "Bac ou equivalent" = "2",
+    "Bac +2" = "3",
+    "Bac +3/4" = "4",
+    "Bac +5 ou plus" = "5"
+  )
+freq(barometre2005$diplome_rec)
+```
+
+On recode la categorie d'agglomération:
+
+```{r recodage cat_agg 2005, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2005$catagg2 en barometre2005$cat_agg6_rec
+barometre2005$cat_agg6_rec <- barometre2005$catagg2 %>%
+  as.character() %>%
+  fct_recode(
+    "Rural" = "1",
+    "<20.000" = "2",
+    "20 - 99.999" = "3",
+    "100.000 - 199.999" = "4",
+    ">=200.000" = "5",
+    "Agglomération parisienne" = "6"
+  )
+freq(barometre2005$cat_agg6_rec)
+```
+
+On recode les catégories croisées de sexe et d'âge:
+
+```{r recodage sexage 2005, echo=FALSE}
+library(forcats)
+library(questionr)
+
+
+## Recodage de barometre2005$s2 en barometre2005$s2_rec ; pas d'âge déclaré au-dessus de 75 ans ; mineurs retirés de la BDD
+barometre2005$s2_rec <- barometre2005$s2 %>%
+  as.character() %>%
+  fct_recode(
+    NULL = "12",
+    NULL = "13",
+    NULL = "14",
+    NULL = "15",
+    NULL = "16",
+    NULL = "17",
+    "18 - 24 ans" = "18",
+    "18 - 24 ans" = "19",
+    "18 - 24 ans" = "20",
+    "18 - 24 ans" = "21",
+    "18 - 24 ans" = "22",
+    "18 - 24 ans" = "23",
+    "18 - 24 ans" = "24",
+    "25 - 34 ans" = "25",
+    "25 - 34 ans" = "26",
+    "25 - 34 ans" = "27",
+    "25 - 34 ans" = "28",
+    "25 - 34 ans" = "29",
+    "25 - 34 ans" = "30",
+    "25 - 34 ans" = "31",
+    "25 - 34 ans" = "32",
+    "25 - 34 ans" = "33",
+    "25 - 34 ans" = "34",
+    "35 - 44 ans" = "35",
+    "35 - 44 ans" = "36",
+    "35 - 44 ans" = "37",
+    "35 - 44 ans" = "38",
+    "35 - 44 ans" = "39",
+    "35 - 44 ans" = "40",
+    "35 - 44 ans" = "41",
+    "35 - 44 ans" = "42",
+    "35 - 44 ans" = "43",
+    "35 - 44 ans" = "44",
+    "45 - 54 ans" = "45",
+    "45 - 54 ans" = "46",
+    "45 - 54 ans" = "47",
+    "45 - 54 ans" = "48",
+    "45 - 54 ans" = "49",
+    "45 - 54 ans" = "50",
+    "45 - 54 ans" = "51",
+    "45 - 54 ans" = "52",
+    "45 - 54 ans" = "53",
+    "45 - 54 ans" = "54",
+    "55 - 64 ans" = "55",
+    "55 - 64 ans" = "56",
+    "55 - 64 ans" = "57",
+    "55 - 64 ans" = "58",
+    "55 - 64 ans" = "59",
+    "55 - 64 ans" = "60",
+    "55 - 64 ans" = "61",
+    "55 - 64 ans" = "62",
+    "55 - 64 ans" = "63",
+    "55 - 64 ans" = "64",
+    "65 - 75 ans" = "65",
+    "65 - 75 ans" = "66",
+    "65 - 75 ans" = "67",
+    "65 - 75 ans" = "68",
+    "65 - 75 ans" = "69",
+    "65 - 75 ans" = "70",
+    "65 - 75 ans" = "71",
+    "65 - 75 ans" = "72",
+    "65 - 75 ans" = "73",
+    "65 - 75 ans" = "74",
+    "65 - 75 ans" = "75"
+  )
+
+## Variable s1: 1= homme ; 2= femme
+
+barometre2005$sexage_rec <- case_when(
+  barometre2005$s2_rec == "18 - 24 ans" & barometre2005$s1 == 2 ~ "Femme 18-24 ans",
+  barometre2005$s2_rec == "25 - 34 ans" & barometre2005$s1 == 2 ~ "Femme 25-34 ans",
+  barometre2005$s2_rec == "35 - 44 ans"& barometre2005$s1 == 2 ~ "Femme 35-44 ans",
+  barometre2005$s2_rec == "45 - 54 ans" & barometre2005$s1 == 2 ~ "Femme 45-54 ans",
+  barometre2005$s2_rec == "55 - 64 ans" & barometre2005$s1 == 2 ~ "Femme 55-64 ans",
+  barometre2005$s2_rec ==  "65 - 75 ans" & barometre2005$s1 == 2 ~ "Femme 65-75 ans",
+  barometre2005$s2_rec == "18 - 24 ans" & barometre2005$s1 == 1 ~ "Homme 18-24 ans",
+  barometre2005$s2_rec == "25 - 34 ans" & barometre2005$s1 == 1 ~ "Homme 25-34 ans",
+  barometre2005$s2_rec == "35 - 44 ans"& barometre2005$s1 == 1 ~ "Homme 35-44 ans",
+  barometre2005$s2_rec == "45 - 54 ans" & barometre2005$s1 == 1 ~ "Homme 45-54 ans",
+  barometre2005$s2_rec == "55 - 64 ans" & barometre2005$s1 == 1 ~ "Homme 55-64 ans",
+  barometre2005$s2_rec ==  "65 - 75 ans" & barometre2005$s1 == 1 ~ "Homme 65-75 ans",
+
+)
+
+freq(barometre2005$sexage_rec)
+## Réordonnancement de barometre2005$sexage_rec
+barometre2005$sexage_rec <- barometre2005$sexage_rec %>%
+  fct_relevel(
+    "Homme 18-24 ans", "Homme 25-34 ans", "Homme 35-44 ans", "Homme 45-54 ans",
+    "Homme 55-64 ans", "Homme 65-75 ans", "Femme 18-24 ans", "Femme 25-34 ans",
+    "Femme 35-44 ans", "Femme 45-54 ans", "Femme 55-64 ans", "Femme 65-75 ans"
+  )
+```
+
+
+On recode les catégories de revenu:
+
+```{r recodage revenus 2005, echo=FALSE}
+library(forcats)
+library(questionr)
+freq(barometre2005$sb22ucf3)
+## Recodage de barometre2005$sb22ucf3 en barometre2005$rev_3K_rec
+barometre2005$rev_3K_rec <- barometre2005$sb22ucf3%>%
+  as.character() %>%
+  fct_recode(
+    "1er tercile" = "1",
+    "2ème tercile" = "2",
+    "3ème tercile" = "3",
+    NULL = "4"
+  )
+freq(barometre2005$rev_3K_rec)
+```
+
+
+### Tris croisés
+
+On crée d'abord des variables labellisées. En 2005, la question sur le rapport spécifique à telle ou telle vaccination n'est posée qu'aux personnes plutôt ou très défavorable à la vaccination en générale. La réponse sur ce point est décomposée en plus d'une vingtaine de variables, recombinées ici.
+
+```{r recodage variables labellisées 2005, echo=FALSE}
+library(forcats)
+library(questionr)
+library(dplyr)
+barometre2005$va1labeled <- barometre2005$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "Très favorable" = "1",
+    "Plutôt favorable" = "2",
+    "Plutôt défavorable" = "3",
+    "Très défavorable" = "4",
+    "Ne sait pas" = "5"
+  )
+freq(barometre2005$va1labeled)
+
+## Recodage de barometre2005$va2m1 en barometre2005$va2m1_rec
+barometre2005$va2 <- barometre2005$va2m1 %>%
+  as.character() %>%
+  fct_recode(
+    "Défavorable à certains" = "1",
+    "Défavorable à certains" = "2",
+    "Défavorable à certains" = "3",
+    "Défavorable à certains" = "4",
+    "Défavorable à certains" = "5",
+    "Défavorable à certains" = "6",
+    "Défavorable à certains" = "7",
+    "Défavorable à certains" = "8",
+    "Défavorable à certains" = "9",
+    "Défavorable à certains" = "10",
+    "Défavorable à certains" = "11",
+    "Défavorable à certains" = "12",
+    "Défavorable à certains" = "13",
+    "Défavorable à certains" = "14",
+    "Défavorable à certains" = "15",
+    "Défavorable à certains" = "16",
+    "Défavorable à certains" = "17",
+    "Défavorable à certains" = "18",
+    "Défavorable à certains" = "19",
+    "Défavorable à certains" = "20",
+    "Défavorable à tous" = "997",
+    "Défavorable à certains" = "998",
+    "NSP" = "999"
+  )
+
+```
+
+
+On recode la variable va2: 1 pour "défavorable à certains vaccins", 0 autrement. On prend "défavorable à tous" (0) comme scénario de référence.
+
+```{r recadage defav_certains 2005, echo=FALSE}
+library(forcats)
+## Recodage de barometre2020$va2 en barometre2020$defav_certains
+barometre2005$defav_certains <- barometre2005$va2 %>%
+  fct_recode(
+    "1" = "Défavorable à certains",
+    "0" = "Défavorable à tous",
+    NULL = "NSP"
+  )
+barometre2005$defav_certains <- relevel(barometre2005$defav_certains, "0")
+```
+
+Vaccination en général 2005 - croisé avec variables explicatives
+
+
+```{r tris croisés general 2005, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+theme_gtsummary_language("fr", decimal.mark = ",", big.mark = " ")
+barometre2005 %>%
+  dplyr::select("va1labeled", "diplome_rec", "sexage_rec", "cat_agg6_rec", "rev_3K_rec") %>%
+  tbl_summary(
+    by = "va1labeled",
+    percent = "row"
+  ) %>%
+  add_overall(last = TRUE)
+```
+
+Vaccination spécifique 2005 - croisé avec variables explicatives
+
+
+```{r tris croisés spécifique 2005, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+barometre2005 %>%
+  dplyr::select("va2", "diplome_rec", "sexage_rec", "cat_agg6_rec", "rev_3K_rec") %>%
+  tbl_summary(
+    by = "va2",
+    percent = "row"
+  ) %>%
+  add_overall(last = TRUE)
+```
+
+## Vaccins spécifiques
+
+Codé comme en 2010 et 2016. Variable: VA2
+
+```{r tris croisés spécifique 2005, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+barometre2005 %>%
+  dplyr::select("va2", "diplome_rec", "sexage_rec", "cat_agg6_rec", "rev_3K_rec") %>%
+  tbl_summary(
+    by = "va2",
+    percent = "row"
+  ) %>%
+  add_overall(last = TRUE)
+
+```
+
+
+
+```{r recode va2m1 à n 2005, echo=FALSE}
+## Recodage de barometre2005$va2m1 en barometre2005$va2m1_rec
+barometre2005$va2m1_rec <- barometre2005$va2m1 %>%
+  as.character() %>%
+  fct_recode(
+    "bcg" = "1",
+    "cholera" = "2",
+    "dtp" = "3",
+    "fievre jaune" = "4",
+    "grippe" = "5",
+    "hepatite A" = "6",
+    "hepatite B" = "7",
+    "leptospirose" = "8",
+    "meningite" = "9",
+    "meningococcie" = "10",
+    "oreillons" = "11",
+    "pentacoq" = "12",
+    "rage" = "13",
+    "ror" = "14",
+    "rougeole" = "15",
+    "rubeole" = "16",
+    "tetanos" = "17",
+    "tp" = "18",
+    "typhoide" = "19",
+    "varicelle" = "20",
+    "autres vaccinations" = "997",
+    "à toutes" = "998",
+    "nsp" = "999"
+  )
+
+barometre2005$va2m2_rec <- barometre2005$va2m2 %>%
+  as.character() %>%
+  fct_recode(
+    "bcg" = "1",
+    "cholera" = "2",
+    "dtp" = "3",
+    "fievre jaune" = "4",
+    "grippe" = "5",
+    "hepatite A" = "6",
+    "hepatite B" = "7",
+    "leptospirose" = "8",
+    "meningite" = "9",
+    "meningococcie" = "10",
+    "oreillons" = "11",
+    "pentacoq" = "12",
+    "rage" = "13",
+    "ror" = "14",
+    "rougeole" = "15",
+    "rubeole" = "16",
+    "tetanos" = "17",
+    "tp" = "18",
+    "typhoide" = "19",
+    "varicelle" = "20",
+    "autres vaccinations" = "997",
+    "à toutes" = "998",
+    "nsp" = "999"
+  )
+
+barometre2005$va2m3_rec <- barometre2005$va2m3 %>%
+  as.character() %>%
+  fct_recode(
+    "bcg" = "1",
+    "cholera" = "2",
+    "dtp" = "3",
+    "fievre jaune" = "4",
+    "grippe" = "5",
+    "hepatite A" = "6",
+    "hepatite B" = "7",
+    "leptospirose" = "8",
+    "meningite" = "9",
+    "meningococcie" = "10",
+    "oreillons" = "11",
+    "pentacoq" = "12",
+    "rage" = "13",
+    "ror" = "14",
+    "rougeole" = "15",
+    "rubeole" = "16",
+    "tetanos" = "17",
+    "tp" = "18",
+    "typhoide" = "19",
+    "varicelle" = "20",
+    "autres vaccinations" = "997",
+    "à toutes" = "998",
+    "nsp" = "999"
+  )
+
+barometre2005$va2m4_rec <- barometre2005$va2m4 %>%
+  as.character() %>%
+  fct_recode(
+    "bcg" = "1",
+    "cholera" = "2",
+    "dtp" = "3",
+    "fievre jaune" = "4",
+    "grippe" = "5",
+    "hepatite A" = "6",
+    "hepatite B" = "7",
+    "leptospirose" = "8",
+    "meningite" = "9",
+    "meningococcie" = "10",
+    "oreillons" = "11",
+    "pentacoq" = "12",
+    "rage" = "13",
+    "ror" = "14",
+    "rougeole" = "15",
+    "rubeole" = "16",
+    "tetanos" = "17",
+    "tp" = "18",
+    "typhoide" = "19",
+    "varicelle" = "20",
+    "autres vaccinations" = "997",
+    "à toutes" = "998",
+    "nsp" = "999"
+  )
+
+
+barometre2005$va2m5_rec <- barometre2005$va2m5 %>%
+  as.character() %>%
+  fct_recode(
+    "bcg" = "1",
+    "cholera" = "2",
+    "dtp" = "3",
+    "fievre jaune" = "4",
+    "grippe" = "5",
+    "hepatite A" = "6",
+    "hepatite B" = "7",
+    "leptospirose" = "8",
+    "meningite" = "9",
+    "meningococcie" = "10",
+    "oreillons" = "11",
+    "pentacoq" = "12",
+    "rage" = "13",
+    "ror" = "14",
+    "rougeole" = "15",
+    "rubeole" = "16",
+    "tetanos" = "17",
+    "tp" = "18",
+    "typhoide" = "19",
+    "varicelle" = "20",
+    "autres vaccinations" = "997",
+    "à toutes" = "998",
+    "nsp" = "999"
+  )
+
+barometre2005$va2m6_rec <- barometre2005$va2m6 %>%
+  as.character() %>%
+  fct_recode(
+    "bcg" = "1",
+    "cholera" = "2",
+    "dtp" = "3",
+    "fievre jaune" = "4",
+    "grippe" = "5",
+    "hepatite A" = "6",
+    "hepatite B" = "7",
+    "leptospirose" = "8",
+    "meningite" = "9",
+    "meningococcie" = "10",
+    "oreillons" = "11",
+    "pentacoq" = "12",
+    "rage" = "13",
+    "ror" = "14",
+    "rougeole" = "15",
+    "rubeole" = "16",
+    "tetanos" = "17",
+    "tp" = "18",
+    "typhoide" = "19",
+    "varicelle" = "20",
+    "autres vaccinations" = "997",
+    "à toutes" = "998",
+    "nsp" = "999"
+  )
+
+
+barometre2005$va2m7_rec <- barometre2005$va2m7 %>%
+  as.character() %>%
+  fct_recode(
+    "bcg" = "1",
+    "cholera" = "2",
+    "dtp" = "3",
+    "fievre jaune" = "4",
+    "grippe" = "5",
+    "hepatite A" = "6",
+    "hepatite B" = "7",
+    "leptospirose" = "8",
+    "meningite" = "9",
+    "meningococcie" = "10",
+    "oreillons" = "11",
+    "pentacoq" = "12",
+    "rage" = "13",
+    "ror" = "14",
+    "rougeole" = "15",
+    "rubeole" = "16",
+    "tetanos" = "17",
+    "tp" = "18",
+    "typhoide" = "19",
+    "varicelle" = "20",
+    "autres vaccinations" = "997",
+    "à toutes" = "998",
+    "nsp" = "999"
+  )
+
+
+```
+
+```{r exports  vaccins particuliers 2020, echo=FALSE}
+write.csv2(barometre2005[, c("va2m1_rec","va2m2_rec", "va2m3_rec","va2m4_rec", "va2m5_rec", "va2m6_rec", "va2m7_rec")], "~/Desktop/vaxSpecif2005.csv")
+```
+
+
+
+### Calcul de la régression: défavorables aux vaccins (1) par rapport aux favorables
+
+```{r régressions pro anti 2005, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_proanti_2005 <- glm(barometre2005$va1_rec ~ barometre2005$diplome_rec + barometre2005$sexage_rec + barometre2005$cat_agg6_rec + barometre2005$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2005, exponentiate = TRUE)
+forest_model(reg_proanti_2005, recalculate_width= TRUE)
+```
+
+## Très anti Vs reste
+
+### Recodage
+
+Très défavorable aux vaccins = 1 ; 0 sinon. Scénario de référence: 0.
+```{r recodage très anti vs reste 2005, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2005$va1 en barometre2005$Tres_defavorable
+barometre2005$Tres_defavorable <- barometre2005$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "0" = "1",
+    "0" = "2",
+    "0" = "3",
+    "1" = "4",
+    NULL = "5"
+  )
+barometre2005$Tres_defavorables <- relevel(barometre2005$Tres_defavorable , "0")
+freq(barometre2005$Tres_defavorable)
+```
+
+### Régression
+
+```{r régressions tresdef 2005, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_tresdef_2005 <- glm(barometre2005$Tres_defavorable ~ barometre2005$diplome_rec + barometre2005$sexage_rec + barometre2005$cat_agg6_rec + barometre2005$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2005, exponentiate = TRUE)
+forest_model(reg_tresdef_2005, recalculate_width= TRUE)
+```
+
+## Très pro vs reste
+
+### Recodage
+
+
+Très favorable aux vaccins = 1 ; 0 sinon.
+```{r recodage très pro vs reste 2005, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2005$VA1 en barometre2005$Tres_defavorable
+barometre2005$Tres_favorable <- barometre2005$va1 %>%
+  as.character() %>%
+  fct_recode(
+    "1" = "1",
+    "0" = "2",
+    "0" = "3",
+    "0" = "4",
+    NULL = "5"
+  )
+barometre2005$Tres_favorable <- relevel(barometre2005$Tres_favorable , "0")
+freq(barometre2005$Tres_favorable)
+```
+
+### Régression
+
+```{r régressions tresfav 2005, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_tresfav_2005 <- glm(barometre2005$Tres_favorable ~ barometre2005$diplome_rec + barometre2005$sexage_rec + barometre2005$cat_agg6_rec + barometre2005$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2005, exponentiate = TRUE)
+forest_model(reg_tresfav_2005, recalculate_width= TRUE)
+```
+
+
+## Restriction aux favorables aux vaccins en général
+
+
+```{r régressions tresfavvsfavorables 2005, echo=FALSE}
+provax2005 <- barometre2005[barometre2005$va1_rec == 1, ]
+library(GGally)
+library(forestmodel)
+reg_tresfavvsfav_2005 <- glm(provax2005$Tres_favorable ~ provax2005$diplome_rec + provax2005$sexage_rec + provax2005$cat_agg6_rec + provax2005$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_tresfavvsfav_2005, recalculate_width= TRUE)
+```
+
+## Restriction aux défavorables aux vaccin en général
+
+```{r régressions tresdefavvsdefavorables 2005, echo=FALSE}
+antivax2005 <- barometre2005[barometre2005$va1_rec == 0, ]
+library(GGally)
+library(forestmodel)
+reg_tresdefavvsdefav_2005 <- glm(antivax2005$Tres_defavorable ~ antivax2005$diplome_rec + antivax2005$sexage_rec + antivax2005$cat_agg6_rec + antivax2005$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_tresdefavvsdefav_2005, recalculate_width= TRUE)
+```
+
+## Défavorables à certains vaccins vs défavorable à tous
+
+Etre défavorable à certains vaccins vs reste de la population
+
+```{r régressions defav_certains 2005, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_defav_certains_2005 <- glm(barometre2005$defav_certains ~ barometre2005$diplome_rec + barometre2005$sexage_rec + barometre2005$cat_agg6_rec + barometre2005$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2005, exponentiate = TRUE)
+forest_model(reg_defav_certains_2005, recalculate_width= TRUE)
+```
+
+## Restriction aux favorables aux vaccins en général: défavorables à certains vs. reste
+
+
+En 2005, la question sur "être défavorable à certains vaccins" n'est pas posée aux répondants qui se sont déclarés favorables aux vaccins en général.
+
+%```{r régressions defavcertainspro 2005, echo=FALSE}
+%library(GGally)
+%library(forestmodel)
+%reg_favspecifiques_2005 <- glm(provax2005$defav_certains~ provax2005$diplome_rec + provax2005$sexage_rec + provax2005$cat_agg6_rec + provax2005$rev_3K_rec, %na.action=na.omit, family=binomial(logit))
+%## ggcoef_model(reg_proanti_2005, exponentiate = TRUE)
+% forest_model(reg_favspecifiques_2005, recalculate_width= TRUE)
+%```
+
+## Restriction aux défavorables aux vaccins en général: défavorables à certains vs reste
+
+
+```{r régressions defavcertainsanti 2005, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_defavspecifiques_2005 <- glm(antivax2005$defav_certains ~ antivax2005$diplome_rec + antivax2005$sexage_rec + antivax2005$cat_agg6_rec + antivax2005$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2005, exponentiate = TRUE)
+forest_model(reg_defavspecifiques_2005, recalculate_width= TRUE)
+
+
+```
+
+# Baromètre santé 2000
+
+## Pro-anti
+
+### Recodages
+
+On recode la variable va1 en une variable binaire: 1 = provaccin ; 0 = antivaccin. On affiche le tableau des fréquences de la nouvelle variable.
+
+```{r recodage pro anti 2000, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2000$q183 en barometre2000$va1_rec
+barometre2000$va1_rec <- barometre2000$q183 %>%
+  as.character() %>%
+  fct_recode(
+    "1" = "2",
+    "0" = "3",
+    "0" = "4",
+    NULL = "5"
+  )
+freq(barometre2000$va1_rec)
+```
+
+On recode le diplôme:
+
+```{r recodage diplome 2000, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2000$q458 en barometre2000$q458_rec
+barometre2000$diplome_rec <- barometre2000$q458 %>%
+  as.character() %>%
+  fct_recode(
+    "Sans diplome" = "1",
+    "Inferieur bac" = "2",
+    "Inferieur bac" = "3",
+    "Inferieur bac" = "4",
+    "Inferieur bac" = "5",
+    "Bac ou equivalent" = "6",
+    "Bac ou equivalent" = "7",
+    "Bac ou equivalent" = "8",
+    "Bac +2" = "9",
+    "Bac +3/4" = "10",
+    "Bac +3/4" = "11",
+    "Bac +5 ou plus" = "12",
+    "Bac +5 ou plus" = "13",
+    NULL = "14",
+    NULL = "15"
+  )
+freq(barometre2000$diplome_rec)
+```
+
+La catégorie d'agglomération est absente du baromètre 2000.
+
+
+On recode les catégories croisées de sexe et d'âge:
+
+```{r recodage sexage 2000, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2000$s2 en barometre2000$s2_rec ; pas d'âge déclaré au-dessus de 75 ans ; mineurs retirés de la BDD
+barometre2000$s2_rec <- barometre2000$q95 %>%
+  as.character() %>%
+  fct_recode(
+    NULL = "12",
+    NULL = "13",
+    NULL = "14",
+    NULL = "15",
+    NULL = "16",
+    NULL = "17",
+    "18 - 24 ans" = "18",
+    "18 - 24 ans" = "19",
+    "18 - 24 ans" = "20",
+    "18 - 24 ans" = "21",
+    "18 - 24 ans" = "22",
+    "18 - 24 ans" = "23",
+    "18 - 24 ans" = "24",
+    "25 - 34 ans" = "25",
+    "25 - 34 ans" = "26",
+    "25 - 34 ans" = "27",
+    "25 - 34 ans" = "28",
+    "25 - 34 ans" = "29",
+    "25 - 34 ans" = "30",
+    "25 - 34 ans" = "31",
+    "25 - 34 ans" = "32",
+    "25 - 34 ans" = "33",
+    "25 - 34 ans" = "34",
+    "35 - 44 ans" = "35",
+    "35 - 44 ans" = "36",
+    "35 - 44 ans" = "37",
+    "35 - 44 ans" = "38",
+    "35 - 44 ans" = "39",
+    "35 - 44 ans" = "40",
+    "35 - 44 ans" = "41",
+    "35 - 44 ans" = "42",
+    "35 - 44 ans" = "43",
+    "35 - 44 ans" = "44",
+    "45 - 54 ans" = "45",
+    "45 - 54 ans" = "46",
+    "45 - 54 ans" = "47",
+    "45 - 54 ans" = "48",
+    "45 - 54 ans" = "49",
+    "45 - 54 ans" = "50",
+    "45 - 54 ans" = "51",
+    "45 - 54 ans" = "52",
+    "45 - 54 ans" = "53",
+    "45 - 54 ans" = "54",
+    "55 - 64 ans" = "55",
+    "55 - 64 ans" = "56",
+    "55 - 64 ans" = "57",
+    "55 - 64 ans" = "58",
+    "55 - 64 ans" = "59",
+    "55 - 64 ans" = "60",
+    "55 - 64 ans" = "61",
+    "55 - 64 ans" = "62",
+    "55 - 64 ans" = "63",
+    "55 - 64 ans" = "64",
+    "65 - 75 ans" = "65",
+    "65 - 75 ans" = "66",
+    "65 - 75 ans" = "67",
+    "65 - 75 ans" = "68",
+    "65 - 75 ans" = "69",
+    "65 - 75 ans" = "70",
+    "65 - 75 ans" = "71",
+    "65 - 75 ans" = "72",
+    "65 - 75 ans" = "73",
+    "65 - 75 ans" = "74",
+    "65 - 75 ans" = "75"
+  )
+
+## Variable s1: 1= homme ; 2= femme
+barometre2000$sexage_rec <- case_when(
+  barometre2000$s2_rec == "18 - 24 ans" & barometre2000$q94 == 2 ~ "Femme 18-24 ans",
+  barometre2000$s2_rec == "25 - 34 ans" & barometre2000$q94 == 2 ~ "Femme 25-34 ans",
+  barometre2000$s2_rec == "35 - 44 ans"& barometre2000$q94 == 2 ~ "Femme 35-44 ans",
+  barometre2000$s2_rec == "45 - 54 ans" & barometre2000$q94 == 2 ~ "Femme 45-54 ans",
+  barometre2000$s2_rec == "55 - 64 ans" & barometre2000$q94 == 2 ~ "Femme 55-64 ans",
+  barometre2000$s2_rec ==  "65 - 75 ans" & barometre2000$q94 == 2 ~ "Femme 65-75 ans",
+  barometre2000$s2_rec == "18 - 24 ans" & barometre2000$q94 == 1 ~ "Homme 18-24 ans",
+  barometre2000$s2_rec == "25 - 34 ans" & barometre2000$q94 == 1 ~ "Homme 25-34 ans",
+  barometre2000$s2_rec == "35 - 44 ans"& barometre2000$q94 == 1 ~ "Homme 35-44 ans",
+  barometre2000$s2_rec == "45 - 54 ans" & barometre2000$q94 == 1 ~ "Homme 45-54 ans",
+  barometre2000$s2_rec == "55 - 64 ans" & barometre2000$q94 == 1 ~ "Homme 55-64 ans",
+  barometre2000$s2_rec ==  "65 - 75 ans" & barometre2000$q94 == 1 ~ "Homme 65-75 ans",
+
+)
+
+freq(barometre2000$sexage_rec)
+
+## Réordonnancement de barometre2000$sexage_rec
+barometre2000$sexage_rec <- barometre2000$sexage_rec %>%
+  fct_relevel(
+    "Homme 18-24 ans", "Homme 25-34 ans", "Homme 35-44 ans", "Homme 45-54 ans",
+    "Homme 55-64 ans", "Homme 65-75 ans", "Femme 18-24 ans", "Femme 25-34 ans",
+    "Femme 35-44 ans", "Femme 45-54 ans", "Femme 55-64 ans", "Femme 65-75 ans"
+  )
+```
+
+
+On recode les catégories de revenu:
+
+```{r recodage revenus 2000, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2000$q462 en barometre2000$rev_3K_rec
+barometre2000$rev_3K_rec <- barometre2000$q462%>%
+  as.character() %>%
+  fct_recode(
+    "1er tercile" = "1",
+    "1er tercile" = "2",
+    "1er tercile" = "3",
+    "1er tercile" = "4",
+    "2ème tercile" = "5",
+    "2ème tercile" = "6",
+    "2ème tercile" = "7",
+    "2ème tercile" = "8",
+    "3ème tercile" = "9",
+    "3ème tercile" = "10",
+    "3ème tercile" = "11",
+    "3ème tercile" = "12",
+  )
+freq(barometre2000$rev_3K_rec)
+```
+
+
+### Tris croisés
+
+On crée d'abord des variables labellisées. On recode la variable q184i21, qui regroupe les personnes qui, défavorables aux vaccins en général, sont également défavorables à tous les vaccins.
+
+```{r recodage variables labellisées 2000, echo=FALSE}
+library(forcats)
+library(questionr)
+barometre2000$va1labeled <- barometre2000$q183 %>%
+  as.character() %>%
+  fct_recode(
+    "Très favorable" = "1",
+    "Plutôt favorable" = "2",
+    "Plutôt défavorable" = "3",
+    "Très défavorable" = "4",
+    "Ne sait pas" = "5"
+  )
+freq(barometre2000$va1labeled)
+
+## Recodage de barometre2000$va2 en barometre2000$q184i21_rec
+barometre2000$va2 <- barometre2000$q184i21 %>%
+  as.character() %>%
+  fct_recode(
+    "Défavorables à tous" = "1",
+    "Défavorable à certains" = "2"
+  )
+  
+freq(barometre2000$va2)
+
+barometre2000$defav_certains <- barometre2000$va2 %>%
+  as.character() %>%
+  fct_recode(
+    "0" = "Défavorables à tous",
+    "1"=  "Défavorable à certains"
+  )
+barometre2000$defav_certains <- relevel(barometre2000$defav_certains , "0")
+```
+
+Vaccination en général 2000 - croisé avec variables explicatives
+
+
+```{r tris croisés general 2000, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+theme_gtsummary_language("fr", decimal.mark = ",", big.mark = " ")
+barometre2000 %>%
+  dplyr::select("va1labeled", "diplome_rec", "sexage_rec", "rev_3K_rec") %>%
+  tbl_summary(
+    by = "va1labeled",
+    percent = "row"
+  ) %>%
+  add_overall(last = TRUE)
+```
+
+Vaccination spécifique 2000 - croisé avec variables explicatives
+
+
+```{r tris croisés spécifique 2000, echo=FALSE}
+library(gtsummary)
+library(dplyr)
+barometre2000 %>%
+  dplyr::select("va2", "diplome_rec", "sexage_rec", "rev_3K_rec") %>%
+  tbl_summary(
+    by = "va2",
+    percent = "row"
+  ) %>%
+  add_overall(last = TRUE)
+```
+
+### Quels vaccins en particulier ?
+
+BCG
+
+```{r  BCG 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i1)
+```
+
+Cholera
+
+```{r  BCG 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i2)
+```
+DTP (Diphtérie-Tétanos-Poliomyélite) 
+
+```{r  dtp 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i3)
+```
+
+Fièvre jaune
+
+```{r  fievre jaune 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i4)
+```
+
+Grippe
+
+```{r  grippe 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i5)
+```
+
+Hépatite A
+
+```{r  hepatiteA 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i6)
+```
+
+Hépatite B
+
+```{r  hepatiteB 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i7)
+```
+
+Leptospirose
+
+```{r  leptospirose 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i8)
+```
+
+Méningite (Haemophilus influenzae B)
+
+```{r  meningite 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i9)
+```
+
+Méningococcie
+
+```{r  meningococcie 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i10)
+```
+
+Oreillons
+
+```{r  oreillons 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i11)
+```
+
+Pentacoq (Diphtérie-Tétanos-Coqueluche-Polio-Haemophilus influenzae B)
+
+```{r  pentacoq 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i12)
+```
+
+Rage
+
+```{r  rage 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i13)
+```
+
+ROR (Rougeole-oreillons-Rubéole)
+
+
+```{r  ROR 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i14)
+```
+
+Rougeole
+
+```{r  rougeole 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i15)
+```
+
+Rubéole
+
+```{r  rubéole 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i16)
+```
+
+Tétanos
+
+```{r  tétanos 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i17)
+```
+
+TP (Tétanos-Poliomyélite) 
+
+```{r  TP 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i18)
+```
+
+Typhoïde (Typhim/TAB)
+
+```{r  typhoide 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i19)
+```
+
+Autres vaccinations (précisez)
+
+```{r  autres vax 2000, echo=FALSE}
+library(questionr)
+freq(barometre2000$q184i20)
+```
+
+
+
+### Calcul de la régression: probabilité de se montrer défavorable aux vaccins plutôt que favorable
+
+1: être défavorable aux vaccins
+0: être favorable aux vaccins
+
+```{r régressions pro anti 2000, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_proanti_2000 <- glm(barometre2000$va1_rec ~ barometre2000$diplome_rec + barometre2000$sexage_rec + barometre2000$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2000, exponentiate = TRUE)
+summary(reg_proanti_2000)
+forest_model(reg_proanti_2000, recalculate_width= TRUE)
+
+```
+
+## Très anti Vs reste
+
+### Recodage
+
+
+Très défavorable aux vaccins = 1 ; 0 si favorable ou plutôt défavorable.
+
+```{r recodage très anti vs reste 2000, echo=FALSE}
+library(forcats)
+library(questionr)
+library(stats)
+## Recodage de barometre2000$q183 en barometre2000$Tres_defavorable
+barometre2000$Tres_defavorable <- barometre2000$q183 %>%
+  as.character() %>%
+  fct_recode(
+    "0" = "1",
+    "0" = "2",
+    "0" = "3",
+    "1" = "4",
+    NULL = "5"
+  )
+barometre2000$Tres_defavorable <- relevel(barometre2000$Tres_defavorable , "0")
+freq(barometre2000$Tres_defavorable)
+```
+
+### Régression
+
+```{r régressions tresdef 2000, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_tresdef_2000 <- glm(barometre2000$Tres_defavorable ~ barometre2000$diplome_rec + barometre2000$sexage_rec + barometre2000$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2000, exponentiate = TRUE)
+forest_model(reg_tresdef_2000, recalculate_width= TRUE)
+```
+
+## Très pro vs reste
+
+### Recodage
+
+
+Très favorable aux vaccins = 1 ; 0 sinon.
+```{r recodage très pro vs reste 2000, echo=FALSE}
+library(forcats)
+library(questionr)
+## Recodage de barometre2000$q183 en barometre2000$Tres_defavorable
+barometre2000$Tres_favorable <- barometre2000$q183 %>%
+  as.character() %>%
+  fct_recode(
+    "1" = "1",
+    "0" = "2",
+    "0" = "3",
+    "0" = "4",
+    NULL = "5"
+  )
+barometre2000$Tres_favorable <- relevel(barometre2000$Tres_favorable , "0")
+freq(barometre2000$Tres_favorable)
+```
+
+### Régression
+
+1: si très favorable
+0: si défavorable ou plutôt favorable
+
+```{r régressions tresfav 2000, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_tresfav_2000 <- glm(barometre2000$Tres_favorable ~ barometre2000$diplome_rec + barometre2000$sexage_rec + barometre2000$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2000, exponentiate = TRUE)
+forest_model(reg_tresfav_2000, recalculate_width= TRUE)
+```
+
+
+## Restriction aux favorables aux vaccins en général
+
+
+```{r régressions tresfavvsfavorables 2000, echo=FALSE}
+provax2000 <- barometre2000[barometre2000$va1_rec == 1, ]
+library(GGally)
+library(forestmodel)
+reg_tresfavvsfav_2000 <- glm(provax2000$Tres_favorable ~ provax2000$diplome_rec + provax2000$sexage_rec + provax2000$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_tresfavvsfav_2000, recalculate_width= TRUE)
+```
+
+## Restriction aux défavorables aux vaccin en général
+
+```{r régressions tresdefavvsdefavorables 2000, echo=FALSE}
+antivax2000 <- barometre2000[barometre2000$va1_rec == 0, ]
+library(GGally)
+library(forestmodel)
+reg_tresdefavvsdefav_2000 <- glm(antivax2000$Tres_defavorable ~ antivax2000$diplome_rec + antivax2000$sexage_rec +  antivax2000$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+forest_model(reg_tresdefavvsdefav_2000, recalculate_width= TRUE)
+```
+
+## Défavorables à certains vaccins vs défavorables à tous
+
+Etre défavorable à certains vaccins vs reste de la population
+
+```{r régressions defav_certains 2000, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_defav_certains_2000 <- glm(barometre2000$defav_certains ~ barometre2000$diplome_rec + barometre2000$sexage_rec +  barometre2000$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+ggcoef_model(reg_defav_certains_2000, exponentiate = TRUE)
+forest_model(reg_defav_certains_2000, recalculate_width= TRUE)
+```
+
+## Restriction aux favorables aux vaccins en général: défavorables à certains vs. reste
+
+
+En 2000, la question sur "être défavorable à certains vaccins" n'est pas posée aux répondants qui se sont déclarés favorables aux vaccins en général.
+
+
+%```{r régressions defavcertainspro 2000, echo=FALSE}
+%library(GGally)
+%library(forestmodel)
+%reg_favspecifiques_2000 <- glm(provax2000$defav_certains ~ provax2000$diplome_rec + provax2000$sexage_rec + provax2000$rev_3K_rec, na.action=na.omit, %family=binomial(logit))
+%## ggcoef_model(reg_proanti_2000, exponentiate = TRUE)
+%forest_model(reg_favspecifiques_2000, recalculate_width=TRUE)
+%```
+
+## Restriction aux défavorables aux vaccins en général: défavorables à certains vs reste
+
+
+```{r régressions defavcertainsanti 2000, echo=FALSE}
+library(GGally)
+library(forestmodel)
+reg_defavspecifiques_2000 <- glm(antivax2000$defav_certains ~ antivax2000$diplome_rec + antivax2000$sexage_rec +  antivax2000$rev_3K_rec, na.action=na.omit, family=binomial(logit))
+## ggcoef_model(reg_proanti_2000, exponentiate = TRUE)
+forest_model(reg_defavspecifiques_2000, recalculate_width= TRUE)
+```
+
+
+
+
